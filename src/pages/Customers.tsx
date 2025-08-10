@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/useAuth'
 import { ExportButtons } from '@/components/ExportButtons'
 import { enqueue } from '@/lib/offlineQueue'
 
 export default function Customers() {
   const { toast } = useToast()
   const qc = useQueryClient()
+  const { orgId } = useAuth()
   const { data } = useQuery({ queryKey: ['customers'], queryFn: async () => (await supabase.from('customers').select('*').order('created_at', { ascending: false })).data || [] })
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '' })
@@ -20,7 +22,11 @@ export default function Customers() {
 
   const addCustomer = async (e: React.FormEvent) => {
     e.preventDefault()
-    const payload = { ...form }
+    if (!orgId) {
+      toast({ title: 'Organization not set', description: 'Please sign in again.' })
+      return
+    }
+    const payload = { ...form, org_id: orgId }
     try {
       const { error } = await supabase.from('customers').insert(payload)
       if (error) throw error

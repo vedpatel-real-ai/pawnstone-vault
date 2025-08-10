@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/useAuth'
 import { addMonths, format } from 'date-fns'
 import { ExportButtons } from '@/components/ExportButtons'
 import { enqueue } from '@/lib/offlineQueue'
@@ -13,6 +14,7 @@ import { enqueue } from '@/lib/offlineQueue'
 export default function Loans() {
   const { toast } = useToast()
   const qc = useQueryClient()
+  const { orgId } = useAuth()
   const { data: customers } = useQuery({ queryKey: ['customers'], queryFn: async () => (await supabase.from('customers').select('id, name')).data || [] })
   const { data: loans } = useQuery({ queryKey: ['loans'], queryFn: async () => (await supabase.from('loans').select('*').order('created_at', { ascending: false })).data || [] })
 
@@ -23,8 +25,13 @@ export default function Loans() {
 
   const addLoan = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!orgId) {
+      toast({ title: 'Organization not set', description: 'Please sign in again.' })
+      return
+    }
     const nextDue = format(addMonths(new Date(form.start_date), 1), 'yyyy-MM-dd')
     const payload = {
+      org_id: orgId,
       customer_id: form.customer_id,
       asset_type: form.asset_type,
       asset_description: form.asset_description,

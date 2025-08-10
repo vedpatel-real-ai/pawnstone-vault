@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/useAuth'
 import { enqueue } from '@/lib/offlineQueue'
 
 export default function Payments() {
   const { toast } = useToast()
   const qc = useQueryClient()
+  const { orgId } = useAuth()
   const { data: loans } = useQuery({ queryKey: ['loans'], queryFn: async () => (await supabase.from('loans').select('id, asset_type, loan_amount')).data || [] })
   const { data: payments } = useQuery({ queryKey: ['payments'], queryFn: async () => (await supabase.from('payments').select('*').order('created_at', { ascending: false })).data || [] })
 
@@ -20,7 +22,11 @@ export default function Payments() {
 
   const addPayment = async (e: React.FormEvent) => {
     e.preventDefault()
-    const payload = { loan_id: form.loan_id, amount: Number(form.amount), type: form.type as any }
+    if (!orgId) {
+      toast({ title: 'Organization not set', description: 'Please sign in again.' })
+      return
+    }
+    const payload = { loan_id: form.loan_id, amount: Number(form.amount), type: form.type as any, org_id: orgId }
     try {
       const { error } = await supabase.from('payments').insert(payload)
       if (error) throw error
