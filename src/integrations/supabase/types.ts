@@ -358,7 +358,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      _create_enforce_org_trigger: {
+        Args: { _table: unknown }
+        Returns: undefined
+      }
+      assign_user_to_org: {
+        Args: { p_user_id: string; p_org_id: string }
+        Returns: undefined
+      }
+      current_user_org_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       due_status: "pending" | "paid" | "overdue" | "cancelled"
