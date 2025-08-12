@@ -10,6 +10,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
     { to: '/loans', label: 'Loans' },
     { to: '/payments', label: 'Payments' },
     { to: '/reports', label: 'Reports' },
+    { to: '/assets', label: 'Assets' },
     { to: '/notifications', label: 'Notifications' },
   ]
   return (

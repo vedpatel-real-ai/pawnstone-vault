@@ -8,12 +8,38 @@ import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { ExportButtons } from '@/components/ExportButtons'
 import { enqueue } from '@/lib/offlineQueue'
+import { useLocation } from 'react-router-dom'
 
 export default function Customers() {
   const { toast } = useToast()
   const qc = useQueryClient()
   const { orgId } = useAuth()
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  const overdueParam = params.get('overdue') === 'true'
+
   const { data } = useQuery({ queryKey: ['customers'], queryFn: async () => (await supabase.from('customers').select('*').order('created_at', { ascending: false })).data || [] })
+
+  const { data: overdueCustomerIds } = useQuery({
+    queryKey: ['overdue-customer-ids', orgId],
+    queryFn: async () => {
+      if (!orgId) return new Set<string>()
+      const { data: overdueDues } = await supabase
+        .from('dues')
+        .select('loan_id')
+        .eq('org_id', orgId)
+        .eq('status', 'overdue')
+        .eq('due_type', 'interest')
+      const loanIds = Array.from(new Set((overdueDues || []).map((d: any) => d.loan_id).filter(Boolean)))
+      if (loanIds.length === 0) return new Set<string>()
+      const { data: loans } = await supabase
+        .from('loans')
+        .select('id, customer_id')
+        .in('id', loanIds)
+      return new Set<string>((loans || []).map((l: any) => l.customer_id))
+    },
+    enabled: !!orgId,
+  })
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '' })
   const canSave = useMemo(() => form.name.trim().length > 1, [form])
@@ -39,6 +65,12 @@ export default function Customers() {
     }
   }
 
+  const visibleCustomers = useMemo(() => {
+    if (!overdueParam) return data || []
+    const set = overdueCustomerIds || new Set<string>()
+    return (data || []).filter((c: any) => set.has(c.id))
+  }, [data, overdueParam, overdueCustomerIds])
+
   return (
     <div className="grid gap-6 md:grid-cols-3">
       <Card className="md:col-span-1">
@@ -54,12 +86,12 @@ export default function Customers() {
         </CardContent>
       </Card>
       <Card className="md:col-span-2">
-        <CardHeader className="flex items-center justify-between"><CardTitle>Customers</CardTitle>
-          <ExportButtons data={data || []} filename="customers" />
+        <CardHeader className="flex items-center justify-between"><CardTitle>Customers{overdueParam ? ' — Overdue interest' : ''}</CardTitle>
+          <ExportButtons data={visibleCustomers || []} filename="customers" />
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {(data || []).map(c => (
+            {(visibleCustomers || []).map((c: any) => (
               <div key={c.id} className="flex items-center justify-between border rounded-md p-3">
                 <div>
                   <div className="font-medium">{c.name}</div>

@@ -10,13 +10,26 @@ import { useAuth } from '@/hooks/useAuth'
 import { addMonths, format } from 'date-fns'
 import { ExportButtons } from '@/components/ExportButtons'
 import { enqueue } from '@/lib/offlineQueue'
+import { useLocation } from 'react-router-dom'
 
 export default function Loans() {
   const { toast } = useToast()
   const qc = useQueryClient()
   const { orgId } = useAuth()
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  const statusFilter = params.get('status')
+  const loanParam = params.get('loan')
+
   const { data: customers } = useQuery({ queryKey: ['customers'], queryFn: async () => (await supabase.from('customers').select('id, name')).data || [] })
   const { data: loans } = useQuery({ queryKey: ['loans'], queryFn: async () => (await supabase.from('loans').select('*').order('created_at', { ascending: false })).data || [] })
+
+  const filteredLoans = useMemo(() => {
+    let list = loans || []
+    if (loanParam) return list.filter((l: any) => l.id === loanParam)
+    if (statusFilter) return list.filter((l: any) => String(l.status) === statusFilter)
+    return list
+  }, [loans, statusFilter, loanParam])
 
   const [form, setForm] = useState({ customer_id: '', asset_type: 'gold', asset_description: '', asset_value: '', loan_amount: '', interest_rate_percent: '2.5', start_date: format(new Date(), 'yyyy-MM-dd'), term_months: '12' })
   const canSave = useMemo(() => form.customer_id && Number(form.loan_amount) > 0, [form])
@@ -65,7 +78,7 @@ export default function Loans() {
             <Select value={form.customer_id} onValueChange={(v) => setForm({ ...form, customer_id: v })}>
               <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
               <SelectContent>
-                {(customers || []).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {(customers || []).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={form.asset_type} onValueChange={(v) => setForm({ ...form, asset_type: v })}>
@@ -88,11 +101,11 @@ export default function Loans() {
       </Card>
       <Card className="md:col-span-2">
         <CardHeader className="flex items-center justify-between"><CardTitle>Loans</CardTitle>
-          <ExportButtons data={loans || []} filename="loans" />
+          <ExportButtons data={filteredLoans || []} filename="loans" />
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {(loans || []).map(l => (
+            {(filteredLoans || []).map((l: any) => (
               <div key={l.id} className="border rounded-md p-3">
                 <div className="font-medium">{l.asset_type} — ${l.loan_amount} @ {l.interest_rate_percent}%</div>
                 <div className="text-sm text-muted-foreground">Next due: {l.next_due_date} · Status: {l.status}</div>

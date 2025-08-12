@@ -13,6 +13,7 @@ import Loans from "./pages/Loans";
 import Payments from "./pages/Payments";
 import Notifications from "./pages/Notifications";
 import Reports from "./pages/Reports";
+import AssetInventory from "./pages/AssetInventory";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -94,6 +95,16 @@ const App = () => (
               <ProtectedRoute>
                 <AppLayout>
                   <Notifications />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/assets"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <AssetInventory />
                 </AppLayout>
               </ProtectedRoute>
             }
