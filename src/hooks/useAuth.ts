@@ -21,11 +21,12 @@ export function useAuth() {
     if (!session?.user) { setOrgId(null); return }
     supabase.from('profiles').select('org_id').eq('id', session.user.id).maybeSingle().then(async ({ data }) => {
       if (data?.org_id) { setOrgId(data.org_id); return }
-      // If profile missing, create one in the first org
-      const { data: org } = await supabase.from('organizations').select('id').limit(1).single()
-      if (org?.id) {
-        await supabase.from('profiles').upsert({ id: session.user.id, org_id: org.id })
-        setOrgId(org.id)
+      // Ensure profile exists
+      await supabase.from('profiles').upsert({ id: session.user.id })
+      // Create or fetch a default organization for this user via RPC (idempotent)
+      const { data: rpcOrgId } = await supabase.rpc('create_org_for_current_user', { p_name: 'My Organization' })
+      if (rpcOrgId) {
+        setOrgId(rpcOrgId as unknown as string)
       }
     })
   }, [session?.user?.id])

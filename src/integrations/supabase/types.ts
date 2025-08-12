@@ -366,6 +366,10 @@ export type Database = {
         Args: { p_user_id: string; p_org_id: string }
         Returns: undefined
       }
+      create_org_for_current_user: {
+        Args: { p_name?: string }
+        Returns: string
+      }
       current_user_org_id: {
         Args: Record<PropertyKey, never>
         Returns: string
