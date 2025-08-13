@@ -52,30 +52,45 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          alt_phone: string | null
           created_at: string | null
           email: string | null
           id: string
+          id_proof_number: string | null
+          id_proof_url: string | null
           name: string
+          notes: string | null
           org_id: string | null
           phone: string | null
+          profile_photo_url: string | null
         }
         Insert: {
           address?: string | null
+          alt_phone?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          id_proof_number?: string | null
+          id_proof_url?: string | null
           name: string
+          notes?: string | null
           org_id?: string | null
           phone?: string | null
+          profile_photo_url?: string | null
         }
         Update: {
           address?: string | null
+          alt_phone?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          id_proof_number?: string | null
+          id_proof_url?: string | null
           name?: string
+          notes?: string | null
           org_id?: string | null
           phone?: string | null
+          profile_photo_url?: string | null
         }
         Relationships: [
           {
