@@ -150,6 +150,39 @@ export type Database = {
           },
         ]
       }
+      loan_assets: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          loan_id: string
+          org_id: string
+          uploaded_at: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          loan_id: string
+          org_id: string
+          uploaded_at?: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          loan_id?: string
+          org_id?: string
+          uploaded_at?: string
+        }
+        Relationships: []
+      }
       loans: {
         Row: {
           asset_description: string | null
@@ -157,6 +190,7 @@ export type Database = {
           asset_value: number | null
           created_at: string | null
           customer_id: string | null
+          due_date: string | null
           id: string
           interest_rate_percent: number
           last_interest_calculated: string | null
@@ -175,6 +209,7 @@ export type Database = {
           asset_value?: number | null
           created_at?: string | null
           customer_id?: string | null
+          due_date?: string | null
           id?: string
           interest_rate_percent: number
           last_interest_calculated?: string | null
@@ -193,6 +228,7 @@ export type Database = {
           asset_value?: number | null
           created_at?: string | null
           customer_id?: string | null
+          due_date?: string | null
           id?: string
           interest_rate_percent?: number
           last_interest_calculated?: string | null
