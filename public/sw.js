@@ -18,16 +18,29 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Don't cache supabase requests or chrome extensions
+  const url = new URL(event.request.url);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
   event.respondWith((async () => {
     try {
       const networkResponse = await fetch(event.request);
       const cache = await caches.open(CACHE_NAME);
       cache.put(event.request, networkResponse.clone());
       return networkResponse;
-    } catch {
+    } catch (error) {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(event.request);
-      return cached || fetch(event.request);
+      if (cached) {
+        return cached;
+      }
+      throw error;
     }
   })());
 });

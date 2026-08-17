@@ -1,5 +1,5 @@
 import localforage from 'localforage'
-import { supabase } from '@/integrations/supabase/client'
+import { getProvider } from '@/data'
 
 export type Operation = {
   id: string
@@ -25,21 +25,22 @@ export async function enqueue(op: Operation) {
 }
 
 async function applyOperation(op: Operation) {
+  const provider = getProvider()
   switch (op.type) {
     case 'create_customer':
-      return supabase.from('customers').insert(op.payload)
+      return provider.customers.create(op.payload)
     case 'update_customer':
-      return supabase.from('customers').update(op.payload.values).eq('id', op.payload.id)
+      return provider.customers.update(op.payload.id, op.payload.values)
     case 'delete_customer':
-      return supabase.from('customers').delete().eq('id', op.payload.id)
+      return provider.customers.remove(op.payload.id)
     case 'create_loan':
-      return supabase.from('loans').insert(op.payload)
+      return provider.loans.create(op.payload)
     case 'update_loan':
-      return supabase.from('loans').update(op.payload.values).eq('id', op.payload.id)
+      return provider.loans.update(op.payload.id, op.payload.values)
     case 'delete_loan':
-      return supabase.from('loans').delete().eq('id', op.payload.id)
+      return provider.loans.remove(op.payload.id)
     case 'create_payment':
-      return supabase.from('payments').insert(op.payload)
+      return provider.payments.create(op.payload)
   }
 }
 
@@ -48,11 +49,7 @@ export async function processQueue() {
   const remaining: Operation[] = []
   for (const op of ops) {
     try {
-      const { error } = await applyOperation(op)
-      if (error) {
-        console.warn('Operation failed, keeping in queue', op, error)
-        remaining.push(op)
-      }
+      await applyOperation(op)
     } catch (e) {
       console.warn('Operation exception, keeping in queue', op, e)
       remaining.push(op)

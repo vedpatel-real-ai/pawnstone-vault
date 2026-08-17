@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { Upload, X, Image, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getProvider } from '@/data'
+import { useAuth } from '@/hooks/useAuth'
 
 interface AssetImageUploadProps {
   loanId: string
@@ -22,6 +23,8 @@ export function AssetImageUpload({
   disabled = false 
 }: AssetImageUploadProps) {
   const { toast } = useToast()
+  const { orgId } = useAuth()
+  const provider = getProvider()
   const [uploading, setUploading] = useState(false)
   const [previews, setPreviews] = useState<Array<{ file: File; preview: string }>>([])
 
@@ -79,34 +82,30 @@ export function AssetImageUpload({
 
     try {
       for (const preview of previews) {
-        const fileExt = preview.file.name.split('.').pop()
+        const fileExt = preview.file.name.split('.').pop() || 'jpg'
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
         const filePath = `${loanId}/${fileName}`
 
-        const { error: uploadError } = await supabase.storage
-          .from('loan_assets')
-          .upload(filePath, preview.file)
+        const publicUrl = await provider.storage.upload('loan_assets', filePath, preview.file, {
+          upsert: true,
+          contentType: preview.file.type || 'image/jpeg'
+        })
 
-        if (uploadError) throw uploadError
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('loan_assets')
-          .getPublicUrl(filePath)
-
-        // Save to loan_assets table
-        const { error: dbError } = await supabase
-          .from('loan_assets')
-          .insert({
+        // If this is an existing loan, save to loan_assets table immediately
+        let assetId = `${Date.now()}-${Math.random()}`
+        if (loanId !== 'temp' && orgId) {
+          const asset = await provider.loanAssets.add({
             loan_id: loanId,
             file_url: publicUrl,
             file_name: preview.file.name,
-            file_size: preview.file.size
+            file_size: preview.file.size,
+            org_id: orgId
           })
-
-        if (dbError) throw dbError
+          assetId = asset.id
+        }
 
         uploadedImages.push({
-          id: `${Date.now()}-${Math.random()}`,
+          id: assetId,
           url: publicUrl,
           name: preview.file.name
         })
@@ -117,7 +116,7 @@ export function AssetImageUpload({
       
       toast({
         title: 'Images uploaded',
-        description: `${uploadedImages.length} images uploaded successfully`
+        description: `${uploadedImages.length} image(s) processed successfully`
       })
     } catch (error) {
       console.error('Upload error:', error)
@@ -140,23 +139,10 @@ export function AssetImageUpload({
 
   const removeImage = async (imageId: string, imageUrl: string) => {
     try {
-      // Extract file path from URL
-      const urlParts = imageUrl.split('/loan_assets/')
-      if (urlParts.length > 1) {
-        const filePath = urlParts[1]
-        
-        // Delete from storage
-        await supabase.storage
-          .from('loan_assets')
-          .remove([filePath])
+      if (loanId !== 'temp') {
+        await provider.storage.remove('loan_assets', [imageUrl])
+        await provider.loanAssets.remove(imageId)
       }
-
-      // Remove from database
-      await supabase
-        .from('loan_assets')
-        .delete()
-        .eq('loan_id', loanId)
-        .eq('file_url', imageUrl)
 
       onImagesChange(images.filter(img => img.id !== imageId))
       

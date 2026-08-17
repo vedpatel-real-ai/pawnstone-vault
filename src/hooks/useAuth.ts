@@ -1,35 +1,38 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { getProvider } from '@/data'
+import { isDemo } from '@/data/dataProvider'
+import type { AppSession } from '@/data/types'
 
 export function useAuth() {
+  const provider = getProvider()
   const [loading, setLoading] = useState(true)
-  const [session, setSession] = useState<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>(null)
+  const [session, setSession] = useState<AppSession | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    provider.getSession().then((s) => {
+      setSession(s)
       setLoading(false)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    const unsub = provider.onAuthStateChange((s) => {
+      setSession(s)
     })
-    return () => sub.subscription.unsubscribe()
-  }, [])
+    return unsub
+  }, [provider])
 
   useEffect(() => {
     if (!session?.user) { setOrgId(null); return }
-    supabase.from('profiles').select('org_id').eq('id', session.user.id).maybeSingle().then(async ({ data }) => {
-      if (data?.org_id) { setOrgId(data.org_id); return }
-      // Ensure profile exists
-      await supabase.from('profiles').upsert({ id: session.user.id })
-      // Create or fetch a default organization for this user via RPC (idempotent)
-      const { data: rpcOrgId } = await supabase.rpc('create_org_for_current_user', { p_name: 'My Organization' })
-      if (rpcOrgId) {
-        setOrgId(rpcOrgId as unknown as string)
-      }
+    provider.getOrgId(session.user.id).then((id) => {
+      if (id) setOrgId(id)
     })
-  }, [session?.user?.id])
+  }, [session?.user?.id, provider])
 
-  return { loading, session, orgId }
+  // Generate dues on login for demo mode
+  useEffect(() => {
+    if (isDemo() && orgId && provider.generateDues) {
+      provider.generateDues(orgId)
+    }
+  }, [orgId, provider])
+
+  return { loading, session, orgId, isDemo: isDemo() }
 }

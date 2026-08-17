@@ -1,103 +1,125 @@
-# PawnTrack — Pawnshop Management PWA (Supabase)
+# PawnTrack — Pawnshop Management System
 
-PawnTrack is a private mortgage/pawnshop management system. It runs as a responsive PWA and uses Supabase (Postgres + Auth + Edge Functions) as the backend. Core features: customers, loans, payments, monthly interest dues, overdue alerts, CSV/PDF exports, notifications, and offline-first CRUD with sync.
+PawnTrack is a private mortgage/pawnshop management system with real-time KPI tracking, loan management, customer profiles, payment recording, and asset inventory.
 
-## Tech
-- Frontend: React + Vite + TypeScript + Tailwind (shadcn-ui)
-- Backend: Supabase (Postgres tables + RLS + Edge Functions)
-- PWA: manifest + service worker (offline cache)
+It supports two modes:
+1. **Self-Contained Demo Mode (Default)**: Runs completely in your browser using IndexedDB local storage (`localforage`). No remote database, account registration, or API keys needed.
+2. **Supabase Mode**: Connects to a full Supabase backend (PostgreSQL + Auth + Storage + Edge Functions) with Row Level Security.
 
-## Quick start
+---
 
-1) Prereqs
-- Node 18+
-- Supabase CLI installed: https://supabase.com/docs/guides/cli
+## Features
 
-2) Install deps
-```
-npm i
-```
+- **Dashboard & KPIs**: Real-time totals for active loans, overdue loans, monthly interest dues, payments collected, and asset distribution charts.
+- **Customer Management**: Full CRUD for customer profiles with photo uploads, ID proof attachment, contact details, and linked loan histories.
+- **Loan Lifecycle**: Create, edit, track, and close loans with monthly interest calculations and pledged asset photos.
+- **Payment Recording**: Record interest and principal payments with immediate balance updates.
+- **Asset Inventory**: Real-time listing of active pledged collateral (gold, vehicles, properties, etc.).
+- **Reports & Export**: Export loan lists and interest dues to CSV or formatted PDF.
+- **Offline Resilience**: Offline queue using IndexedDB syncs operations when online.
 
-3) Start Supabase locally
-```
-supabase start
-supabase link --project-ref <your-project-ref> # optional if using remote
-supabase db reset -f # applies schema and seeds automatically if linked project is local; otherwise run files below
-```
+---
 
-4) Apply schema + seed (if not using db reset)
-```
-supabase db push --file supabase/schema.sql
-psql "$(supabase status -o json | jq -r .db.url)" -f supabase/seed.sql
-```
+## Deploy to Vercel
 
-5) Configure Edge Function
-- Set secrets (required for function):
-```
-supabase secrets set SUPABASE_URL=<your-supabase-url>
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<your-service-role>
-# Optional for email via SendGrid
-supabase secrets set SENDGRID_API_KEY=<your-sendgrid-api-key>
-```
-- Deploy function:
-```
-supabase functions deploy generate-dues --project-ref <your-project-ref> --no-verify-jwt
+PawnTrack is configured for 1-click deployment on [Vercel](https://vercel.com).
+
+### Method 1: Via Vercel Dashboard (Recommended)
+1. Push this repository to GitHub/GitLab/Bitbucket.
+2. Go to [vercel.com/new](https://vercel.com/new) and import your repository.
+3. Vercel will automatically detect **Vite** as the framework and `dist` as the output directory.
+4. (Optional) If using Supabase, add environment variables in **Project Settings → Environment Variables**:
+   - `VITE_DATA_MODE` = `supabase`
+   - `VITE_SUPABASE_URL` = `https://your-project.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = `your-anon-key`
+   *(If you leave environment variables empty, it will run in standalone Demo Mode!)*
+5. Click **Deploy**.
+
+### Method 2: Via Vercel CLI
+```bash
+npm i -g vercel
+vercel
 ```
 
-6) Schedule daily run
-- Supabase Scheduler (if available): create a daily job hitting the function URL.
-- Or GitHub Actions cron to curl the function endpoint daily.
+---
 
-7) Run the app
+## Quick Start (Local Demo Mode)
+
+Demo mode works immediately out of the box without any setup or backend connection.
+
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Start development server**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Explore the app**:
+   - Navigate to `http://localhost:8080` (or `http://localhost:5173`)
+   - Click **"🔑 Use Demo Account"** (or use `demo@pawntrack.app` / `demo123`)
+   - Explore populated customers, loans, overdue alerts, and charts.
+   - Use **"Reset Demo Data"** in the top navigation bar at any time to restore the initial sample dataset.
+
+---
+
+## Supabase Mode (Production / Custom Backend)
+
+To connect PawnTrack to a live Supabase backend:
+
+1. **Configure Environment Variables**:
+   Create a `.env.local` file:
+   ```bash
+   VITE_DATA_MODE="supabase"
+   VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
+   VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
+   ```
+
+2. **Apply Database Schema**:
+   Run the schema in your Supabase SQL editor:
+   - `supabase/schema.sql` (Tables, types, RLS policies, trigger functions)
+   - `supabase/seed.sql` (Initial organization and test data)
+
+3. **Deploy Edge Functions (Optional for scheduled dues)**:
+   ```bash
+   supabase functions deploy generate-dues --project-ref <your-project-ref> --no-verify-jwt
+   ```
+
+---
+
+## Architecture
+
+PawnTrack uses a clean **Data Provider Abstraction** layer (`src/data/`):
+
 ```
-npm run dev
+UI Pages & Components (Dashboard, Customers, Loans, Payments, etc.)
+                   │
+                   ▼
+       DataProvider Interface (src/data/dataProvider.ts)
+                   │
+         ┌─────────┴─────────┐
+         ▼                   ▼
+    DemoProvider      SupabaseProvider
+(IndexedDB / Local)   (Supabase Client)
 ```
 
-Login/Signup: Create an account on first run. The app creates your profile and links you to the demo organization so you can see seeded data.
+- `src/data/types.ts`: Canonical application entity models.
+- `src/data/dataProvider.ts`: Provider contract covering auth, CRUD, storage, and queries.
+- `src/data/demo/`: Browser-local demo provider, seed dataset generator, and localforage storage engine.
+- `src/data/supabase/`: Supabase provider wrapping client calls and storage buckets.
 
-## Monthly interest calculation
-Simple monthly interest:
-```
-interest = remaining_principal * (interest_rate_percent / 100)
-```
-Rounded to 2 decimals (see src/lib/interest.ts with unit test).
+---
 
-## Offline-first
-- Operations queue to local storage via localforage (src/lib/offlineQueue.ts)
-- When offline, creates are queued and retried when back online.
+## Testing
 
-## Export
-- CSV via PapaParse; PDF via jsPDF.
-
-## Tests
-- Unit test: src/lib/interest.test.ts (Vitest)
-- E2E skeleton: tests/e2e.spec.ts (Playwright)
-
-Run unit tests:
-```
+Run unit tests (Vitest):
+```bash
 npx vitest run
 ```
 
-## Security & RLS
-- All tables are org-scoped with RLS policies. Users only see data for their org via profiles.org_id.
-- SERVICE_ROLE_KEY used only in Edge Functions.
-
-## Directory
-- supabase/schema.sql — tables + RLS
-- supabase/seed.sql — sample org, customers, loans, payments
-- edge-functions/generate-dues/index.ts — daily dues generation + optional email
-- public/manifest.webmanifest, public/sw.js — PWA
-- src/pages — UI pages
-- src/lib/offlineQueue.ts — offline queue
-- src/lib/interest.ts — interest util
-
-## Acceptance checklist
-- [ ] Signup and sign in works; profile created
-- [ ] Create customer; appears in list
-- [ ] Create loan; next due set 1 month after start
-- [ ] Record payment
-- [ ] Reports export CSV/PDF
-- [ ] Edge function runs; dues created; overdue marked
-- [ ] Notification appears after dues generation
-- [ ] Offline create (disable network), then re-enable; data syncs
-- [ ] PWA installable; basic offline navigation works
+Run production build:
+```bash
+npm run build
+```

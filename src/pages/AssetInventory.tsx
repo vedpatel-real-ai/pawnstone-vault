@@ -1,31 +1,34 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/integrations/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
-import { addMonths, eachMonthOfInterval, endOfMonth, format, isWithinInterval, startOfMonth, subMonths } from 'date-fns'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, BadgeDollarSign, Banknote, PieChart as PieIcon, TrendingUp, Users, Boxes } from 'lucide-react'
+import { getProvider } from '@/data'
 
-// Minimal Asset Inventory page showing active assets
+// Asset Inventory page showing active assets
 export default function AssetInventory() {
   const { orgId } = useAuth()
   const navigate = useNavigate()
-  const { data, isLoading } = useQuery({
+  const provider = getProvider()
+
+  const { data = [], isLoading } = useQuery({
     queryKey: ['assets', orgId],
     queryFn: async () => {
       if (!orgId) return []
-      const { data } = await supabase
-        .from('loans')
-        .select('id, customer_id, asset_type, asset_description, asset_value, start_date')
-        .eq('org_id', orgId)
-        .eq('status', 'active')
-        .order('start_date', { ascending: false })
-      return data || []
+      const loans = await provider.loans.list(orgId)
+      return loans
+        .filter(l => l.status === 'active')
+        .map(l => ({
+          id: l.id,
+          customer_id: l.customer_id,
+          asset_type: l.asset_type,
+          asset_description: l.asset_description,
+          asset_value: l.asset_value,
+          start_date: l.start_date,
+        }))
+        .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
     },
     enabled: !!orgId,
   })
@@ -56,16 +59,16 @@ export default function AssetInventory() {
             </div>
           ) : (
             <div className="divide-y">
-              {(data || []).map((a: any) => (
+              {data.map((a: any) => (
                 <div key={a.id} className="py-4 flex items-start justify-between">
                   <div>
-                    <div className="font-medium">{a.asset_type || 'Other'} — ${a.asset_value || 0}</div>
+                    <div className="font-medium">{a.asset_type || 'Other'} — ₹{Number(a.asset_value || 0).toLocaleString()}</div>
                     <div className="text-sm text-muted-foreground">{a.asset_description || 'No description'}</div>
                   </div>
                   <Button size="sm" variant="secondary" onClick={() => navigate(`/loans?loan=${a.id}`)}>View loan</Button>
                 </div>
               ))}
-              {(data || []).length === 0 && (
+              {data.length === 0 && (
                 <div className="text-sm text-muted-foreground">No active assets.</div>
               )}
             </div>

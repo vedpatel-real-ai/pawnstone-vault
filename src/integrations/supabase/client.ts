@@ -2,8 +2,12 @@
 import { createClient } from '@supabase/supabase-js';
 
 
-const SUPABASE_URL = "https://bwquoysaytlhbmgoewkw.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3cXVveXNheXRsaGJtZ29ld2t3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MjM3OTcsImV4cCI6MjA3MDM5OTc5N30.cXYqUbZgpj7mXfMLvgKNUaEoAGI5EHrBkldbTKHuvUw";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "placeholder_key";
+
+if (SUPABASE_URL === "https://placeholder.supabase.co") {
+  console.error("CRITICAL: Supabase credentials are missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local");
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
