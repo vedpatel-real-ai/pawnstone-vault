@@ -21,4 +21,8 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+# Test artifacts
+test-results/
+playwright-report/
+.cache/
+

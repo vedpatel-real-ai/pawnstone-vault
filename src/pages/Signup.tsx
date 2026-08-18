@@ -60,9 +60,10 @@ function SupabaseSignup() {
       setLoading(false)
       toast({ title: 'Account created', description: 'You can now sign in.' })
       window.location.href = '/login'
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false)
-      toast({ title: 'Signup failed', description: err.message || 'Unknown error', variant: 'destructive' })
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      toast({ title: 'Signup failed', description: msg, variant: 'destructive' })
     }
   }
 

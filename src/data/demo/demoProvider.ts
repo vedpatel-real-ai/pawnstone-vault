@@ -6,11 +6,11 @@ import type { Customer, Loan, Payment, Due, Notification, LoanAsset, AppSession 
 import { db, media, getDemoSession, setDemoSession, isInitialized, markInitialized, clearAllDemoData } from './demoStorage'
 import { createSeedData, getDemoOrgId } from './demoSeed'
 import { calculateMonthlyInterest } from '@/lib/interest'
-import { format, addMonths, parseISO, isBefore } from 'date-fns'
+import { format, addMonths, parseISO, isBefore, startOfDay } from 'date-fns'
 
 const DEMO_USER = { id: 'demo-user-0001', email: 'demo@pawntrack.app' }
 
-// Object URL cache to prevent leaks
+// Object URL cache to prevent memory leaks
 const objectUrlCache = new Map<string, string>()
 
 function revokeTrackedUrl(key: string) {
@@ -40,24 +40,42 @@ function notifyAuthListeners(session: AppSession | null) {
   authListeners.forEach(cb => cb(session))
 }
 
-// Generate any missing monthly dues for active loans (idempotent)
+// Generate any missing monthly dues for active/overdue loans and mark past dues as overdue (idempotent)
 async function generateDuesForOrg(orgId: string): Promise<void> {
-  const loans = (await db.loans.getAll()).filter(l => l.org_id === orgId && (l.status === 'active' || l.status === 'overdue'))
+  const allLoans = await db.loans.getAll()
+  const loans = allLoans.filter(l => l.org_id === orgId && (l.status === 'active' || l.status === 'overdue'))
   const allDues = await db.dues.getAll()
   const now = new Date()
+  const todayStr = format(now, 'yyyy-MM-dd')
+  let duesChanged = false
+
+  // 1. Transition past pending dues to overdue (never revert paid/cancelled)
+  const updatedDues = allDues.map(due => {
+    if (due.org_id === orgId && due.status === 'pending' && due.due_date < todayStr) {
+      duesChanged = true
+      return { ...due, status: 'overdue' as const }
+    }
+    return due
+  })
+
+  // 2. Generate missing monthly dues up to current month horizon
   const newDues: Due[] = []
 
   for (const loan of loans) {
     const startDate = parseISO(loan.start_date)
-    // Generate dues up to and including current month
     let dueMonth = addMonths(startDate, 1)
-    while (isBefore(dueMonth, addMonths(now, 1))) {
+    const horizon = addMonths(now, 1)
+
+    while (isBefore(dueMonth, horizon)) {
       const dueDateStr = format(dueMonth, 'yyyy-MM-dd')
-      // Idempotency: check for existing due for this loan/date/type
-      const exists = allDues.some(d => d.loan_id === loan.id && d.due_date === dueDateStr && d.due_type === 'interest')
-      if (!exists && !newDues.some(d => d.loan_id === loan.id && d.due_date === dueDateStr && d.due_type === 'interest')) {
+      const existsInCurrent = updatedDues.some(d => d.loan_id === loan.id && d.due_date === dueDateStr && d.due_type === 'interest')
+      const existsInNew = newDues.some(d => d.loan_id === loan.id && d.due_date === dueDateStr && d.due_type === 'interest')
+
+      if (!existsInCurrent && !existsInNew) {
         const amount = calculateMonthlyInterest(loan.remaining_principal, loan.interest_rate_percent)
-        const status = isBefore(dueMonth, now) ? 'overdue' : 'pending'
+        const isPast = isBefore(startOfDay(dueMonth), startOfDay(now))
+        const status: Due['status'] = isPast ? 'overdue' : 'pending'
+
         newDues.push({
           id: `demo-due-gen-${loan.id}-${dueDateStr}`,
           org_id: orgId,
@@ -65,21 +83,21 @@ async function generateDuesForOrg(orgId: string): Promise<void> {
           due_date: dueDateStr,
           amount,
           due_type: 'interest',
-          status: status as Due['status'],
+          status,
           created_at: new Date().toISOString(),
         })
+        duesChanged = true
       }
       dueMonth = addMonths(dueMonth, 1)
     }
   }
 
-  if (newDues.length > 0) {
-    await db.dues.setAll([...allDues, ...newDues])
+  if (duesChanged) {
+    await db.dues.setAll([...updatedDues, ...newDues])
   }
 }
 
 export function createDemoProvider(): DataProvider {
-  // Ensure initialization on first use
   const initPromise = initialize()
 
   async function ensureInit() {
@@ -122,7 +140,9 @@ export function createDemoProvider(): DataProvider {
     customers: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.customers.getAll()).filter(c => c.org_id === orgId).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return (await db.customers.getAll())
+          .filter(c => c.org_id === orgId)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async get(id: string) {
         await ensureInit()
@@ -130,7 +150,11 @@ export function createDemoProvider(): DataProvider {
       },
       async create(data) {
         await ensureInit()
-        const customer: Customer = { ...data, id: `demo-customer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created_at: new Date().toISOString() }
+        const customer: Customer = {
+          ...data,
+          id: `demo-customer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          created_at: new Date().toISOString(),
+        }
         const all = await db.customers.getAll()
         await db.customers.setAll([...all, customer])
         return customer
@@ -146,10 +170,33 @@ export function createDemoProvider(): DataProvider {
       },
       async remove(id) {
         await ensureInit()
+        const customer = (await db.customers.getAll()).find(c => c.id === id)
+        if (customer) {
+          if (customer.profile_photo_url) {
+            revokeTrackedUrl(customer.profile_photo_url)
+            await media.remove(customer.profile_photo_url)
+          }
+          if (customer.id_proof_url) {
+            revokeTrackedUrl(customer.id_proof_url)
+            await media.remove(customer.id_proof_url)
+          }
+        }
+
         await db.customers.setAll((await db.customers.getAll()).filter(c => c.id !== id))
-        // Cascade: remove related loans, payments, dues
+
+        // Cascade: remove related loans, payments, dues, and loan assets
         const loans = (await db.loans.getAll()).filter(l => l.customer_id === id)
         const loanIds = new Set(loans.map(l => l.id))
+
+        // Remove media for all customer's loan assets
+        const allAssets = await db.loanAssets.getAll()
+        for (const a of allAssets) {
+          if (loanIds.has(a.loan_id)) {
+            revokeTrackedUrl(a.file_url)
+            await media.remove(a.file_url)
+          }
+        }
+
         await db.loans.setAll((await db.loans.getAll()).filter(l => l.customer_id !== id))
         await db.payments.setAll((await db.payments.getAll()).filter(p => !loanIds.has(p.loan_id)))
         await db.dues.setAll((await db.dues.getAll()).filter(d => !loanIds.has(d.loan_id)))
@@ -161,7 +208,9 @@ export function createDemoProvider(): DataProvider {
     loans: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.loans.getAll()).filter(l => l.org_id === orgId).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return (await db.loans.getAll())
+          .filter(l => l.org_id === orgId)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async get(id: string) {
         await ensureInit()
@@ -169,7 +218,12 @@ export function createDemoProvider(): DataProvider {
       },
       async create(data) {
         await ensureInit()
-        const loan: Loan = { ...data, id: `demo-loan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+        const loan: Loan = {
+          ...data,
+          id: `demo-loan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
         await db.loans.setAll([...(await db.loans.getAll()), loan])
         return loan
       },
@@ -187,6 +241,7 @@ export function createDemoProvider(): DataProvider {
         await db.loans.setAll((await db.loans.getAll()).filter(l => l.id !== id))
         await db.payments.setAll((await db.payments.getAll()).filter(p => p.loan_id !== id))
         await db.dues.setAll((await db.dues.getAll()).filter(d => d.loan_id !== id))
+
         // Remove loan assets and their media
         const assets = (await db.loanAssets.getAll()).filter(a => a.loan_id === id)
         for (const a of assets) {
@@ -201,12 +256,77 @@ export function createDemoProvider(): DataProvider {
     payments: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.payments.getAll()).filter(p => p.org_id === orgId).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return (await db.payments.getAll())
+          .filter(p => p.org_id === orgId)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async create(data) {
         await ensureInit()
-        const payment: Payment = { ...data, id: `demo-payment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created_at: new Date().toISOString() }
+        const payment: Payment = {
+          ...data,
+          id: `demo-payment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          created_at: new Date().toISOString(),
+        }
+
+        // 1. Save payment
         await db.payments.setAll([...(await db.payments.getAll()), payment])
+
+        // 2. Synchronize loan state and dues based on payment type
+        const allLoans = await db.loans.getAll()
+        const loanIdx = allLoans.findIndex(l => l.id === payment.loan_id)
+
+        if (loanIdx >= 0) {
+          const loan = allLoans[loanIdx]
+
+          if (payment.type === 'principal') {
+            const newPrincipal = Math.max(0, Number(loan.remaining_principal || 0) - Number(payment.amount))
+            const isFullyPaid = newPrincipal === 0
+            const updatedStatus = isFullyPaid ? 'closed' : loan.status
+
+            allLoans[loanIdx] = {
+              ...loan,
+              remaining_principal: newPrincipal,
+              status: updatedStatus,
+              updated_at: new Date().toISOString(),
+            }
+            await db.loans.setAll(allLoans)
+          } else if (payment.type === 'interest') {
+            // Settle oldest unpaid due (overdue first, then pending)
+            const allDues = await db.dues.getAll()
+            const unpaidDues = allDues
+              .filter(d => d.loan_id === loan.id && (d.status === 'overdue' || d.status === 'pending'))
+              .sort((a, b) => a.due_date.localeCompare(b.due_date))
+
+            if (unpaidDues.length > 0) {
+              const dueToSettle = unpaidDues[0]
+              const dueIdx = allDues.findIndex(d => d.id === dueToSettle.id)
+              if (dueIdx >= 0) {
+                allDues[dueIdx] = { ...allDues[dueIdx], status: 'paid' }
+                await db.dues.setAll(allDues)
+              }
+            }
+
+            // Check if any overdue dues remain for this loan
+            const remainingOverdue = (await db.dues.getAll()).filter(
+              d => d.loan_id === loan.id && d.status === 'overdue'
+            )
+
+            // If no overdue dues remain, check if loan was overdue solely due to missed dues
+            if (remainingOverdue.length === 0 && loan.status === 'overdue') {
+              const todayStr = format(new Date(), 'yyyy-MM-dd')
+              const isPastMaturity = loan.due_date ? loan.due_date < todayStr : false
+              if (!isPastMaturity) {
+                allLoans[loanIdx] = {
+                  ...loan,
+                  status: 'active',
+                  updated_at: new Date().toISOString(),
+                }
+                await db.loans.setAll(allLoans)
+              }
+            }
+          }
+        }
+
         return payment
       },
     },
@@ -228,7 +348,11 @@ export function createDemoProvider(): DataProvider {
       },
       async create(data) {
         await ensureInit()
-        const due: Due = { ...data, id: `demo-due-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created_at: new Date().toISOString() }
+        const due: Due = {
+          ...data,
+          id: `demo-due-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          created_at: new Date().toISOString(),
+        }
         await db.dues.setAll([...(await db.dues.getAll()), due])
         return due
       },
@@ -238,11 +362,17 @@ export function createDemoProvider(): DataProvider {
     notifications: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.notifications.getAll()).filter(n => n.org_id === orgId).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return (await db.notifications.getAll())
+          .filter(n => n.org_id === orgId)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async create(data) {
         await ensureInit()
-        const notif: Notification = { ...data, id: `demo-notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created_at: new Date().toISOString() }
+        const notif: Notification = {
+          ...data,
+          id: `demo-notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          created_at: new Date().toISOString(),
+        }
         await db.notifications.setAll([...(await db.notifications.getAll()), notif])
         return notif
       },
@@ -256,7 +386,11 @@ export function createDemoProvider(): DataProvider {
       },
       async add(data) {
         await ensureInit()
-        const asset: LoanAsset = { ...data, id: `demo-asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, created_at: new Date().toISOString() }
+        const asset: LoanAsset = {
+          ...data,
+          id: `demo-asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          created_at: new Date().toISOString(),
+        }
         await db.loanAssets.setAll([...(await db.loanAssets.getAll()), asset])
         return asset
       },
@@ -274,14 +408,18 @@ export function createDemoProvider(): DataProvider {
 
     // --- Storage ---
     storage: {
-      async upload(_bucket: string, path: string, file: File | Blob, _options?: { upsert?: boolean; contentType?: string }): Promise<string> {
+      async upload(bucket: string, path: string, file: File | Blob, _options?: { upsert?: boolean; contentType?: string }): Promise<string> {
         await ensureInit()
-        const key = `demo-media:${path}`
+        const key = path.startsWith('demo-media:') ? path : `demo-media:${bucket}/${path}`
         await media.store(key, file)
-        return key // return the storage key as "url"
+        return key
       },
-      async getUrl(_bucket: string, path: string): Promise<string> {
-        const key = path.startsWith('demo-media:') ? path : `demo-media:${path}`
+      async getUrl(bucket: string, path: string): Promise<string> {
+        if (!path || path === '' || path === '/placeholder.svg') return '/placeholder.svg'
+        if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
+          return path
+        }
+        const key = path.startsWith('demo-media:') ? path : `demo-media:${bucket}/${path}`
         const blob = await media.get(key)
         if (!blob) return '/placeholder.svg'
         revokeTrackedUrl(key)
@@ -289,9 +427,9 @@ export function createDemoProvider(): DataProvider {
         objectUrlCache.set(key, url)
         return url
       },
-      async remove(_bucket: string, paths: string[]): Promise<void> {
+      async remove(bucket: string, paths: string[]): Promise<void> {
         for (const p of paths) {
-          const key = p.startsWith('demo-media:') ? p : `demo-media:${p}`
+          const key = p.startsWith('demo-media:') ? p : `demo-media:${bucket}/${p}`
           revokeTrackedUrl(key)
           await media.remove(key)
         }
@@ -314,7 +452,7 @@ export function createDemoProvider(): DataProvider {
       await clearAllDemoData()
       // Revoke all tracked object URLs
       objectUrlCache.forEach((_url, key) => revokeTrackedUrl(key))
-      // Re-initialize with seed data
+      // Re-initialize with fresh seed data
       const seed = createSeedData()
       await db.customers.setAll(seed.customers)
       await db.loans.setAll(seed.loans)

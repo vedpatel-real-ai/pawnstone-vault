@@ -1,13 +1,15 @@
 import localforage from 'localforage'
 import { getProvider } from '@/data'
+import type { Customer, Loan, Payment } from '@/data/types'
 
-export type Operation = {
-  id: string
-  type: 'create_customer' | 'update_customer' | 'delete_customer' |
-        'create_loan' | 'update_loan' | 'delete_loan' |
-        'create_payment'
-  payload: any
-}
+export type Operation =
+  | { id: string; type: 'create_customer'; payload: Omit<Customer, 'id' | 'created_at'> }
+  | { id: string; type: 'update_customer'; payload: { id: string; values: Partial<Customer> } }
+  | { id: string; type: 'delete_customer'; payload: { id: string } }
+  | { id: string; type: 'create_loan'; payload: Omit<Loan, 'id' | 'created_at' | 'updated_at'> }
+  | { id: string; type: 'update_loan'; payload: { id: string; values: Partial<Loan> } }
+  | { id: string; type: 'delete_loan'; payload: { id: string } }
+  | { id: string; type: 'create_payment'; payload: Omit<Payment, 'id' | 'created_at'> }
 
 const STORE_KEY = 'pawntrack-offline-ops'
 

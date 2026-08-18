@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
 
 -- Loans
 DO $$ BEGIN
-  CREATE TYPE public.loan_status AS ENUM ('active','closed','defaulted');
+  CREATE TYPE public.loan_status AS ENUM ('active','overdue','closed','defaulted');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS public.loans (

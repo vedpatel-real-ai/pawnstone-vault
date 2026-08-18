@@ -1,0 +1,30 @@
+import { defineConfig, devices } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './tests',
+  timeout: 45000,
+  expect: {
+    timeout: 10000,
+  },
+  fullyParallel: false,
+  retries: 0,
+  workers: 1,
+  reporter: 'list',
+  use: {
+    baseURL: 'http://localhost:8080',
+    trace: 'on-first-retry',
+    viewport: { width: 1280, height: 720 },
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:8080',
+    reuseExistingServer: true,
+    timeout: 120000,
+  },
+})

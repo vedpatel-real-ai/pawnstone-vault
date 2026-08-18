@@ -1,5 +1,5 @@
 // Supabase data provider — wraps the existing supabase client calls.
-// This preserves the original Supabase implementation while conforming to DataProvider.
+// Conforms to the DataProvider interface for production Supabase mode.
 
 import type { DataProvider } from '../dataProvider'
 import type { Customer, Loan, Payment, Due, Notification, LoanAsset, AppSession } from '../types'
@@ -39,20 +39,22 @@ export function createSupabaseProvider(): DataProvider {
     // --- Customers ---
     customers: {
       async list(_orgId: string) {
-        const { data } = await supabase.from('customers').select('*').order('created_at', { ascending: false })
+        const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false })
+        if (error) throw error
         return (data || []) as Customer[]
       },
       async get(id: string) {
-        const { data } = await supabase.from('customers').select('*').eq('id', id).maybeSingle()
+        const { data, error } = await supabase.from('customers').select('*').eq('id', id).maybeSingle()
+        if (error) throw error
         return (data as Customer) || null
       },
       async create(input) {
-        const { data, error } = await supabase.from('customers').insert(input as any).select().single()
+        const { data, error } = await supabase.from('customers').insert(input as never).select().single()
         if (error) throw error
         return data as Customer
       },
       async update(id, input) {
-        const { error } = await supabase.from('customers').update(input as any).eq('id', id)
+        const { error } = await supabase.from('customers').update(input as never).eq('id', id)
         if (error) throw error
       },
       async remove(id) {
@@ -64,20 +66,22 @@ export function createSupabaseProvider(): DataProvider {
     // --- Loans ---
     loans: {
       async list(_orgId: string) {
-        const { data } = await supabase.from('loans').select('*').order('created_at', { ascending: false })
+        const { data, error } = await supabase.from('loans').select('*').order('created_at', { ascending: false })
+        if (error) throw error
         return (data || []) as Loan[]
       },
       async get(id: string) {
-        const { data } = await supabase.from('loans').select('*').eq('id', id).maybeSingle()
+        const { data, error } = await supabase.from('loans').select('*').eq('id', id).maybeSingle()
+        if (error) throw error
         return (data as Loan) || null
       },
       async create(input) {
-        const { data, error } = await supabase.from('loans').insert(input as any).select().single()
+        const { data, error } = await supabase.from('loans').insert(input as never).select().single()
         if (error) throw error
         return data as Loan
       },
       async update(id, input) {
-        const { error } = await supabase.from('loans').update(input as any).eq('id', id)
+        const { error } = await supabase.from('loans').update(input as never).eq('id', id)
         if (error) throw error
       },
       async remove(id) {
@@ -90,28 +94,57 @@ export function createSupabaseProvider(): DataProvider {
     // --- Payments ---
     payments: {
       async list(_orgId: string) {
-        const { data } = await supabase.from('payments').select('*').order('created_at', { ascending: false })
+        const { data, error } = await supabase.from('payments').select('*').order('created_at', { ascending: false })
+        if (error) throw error
         return (data || []) as Payment[]
       },
       async create(input) {
-        const { data, error } = await supabase.from('payments').insert(input as any).select().single()
+        const { data: payment, error } = await supabase.from('payments').insert(input as never).select().single()
         if (error) throw error
-        return data as Payment
+
+        // Synchronize principal balance
+        if (input.type === 'principal' && input.loan_id) {
+          const { data: loan } = await supabase.from('loans').select('remaining_principal, status').eq('id', input.loan_id).maybeSingle()
+          if (loan) {
+            const newPrincipal = Math.max(0, Number(loan.remaining_principal || 0) - Number(input.amount))
+            const updatePayload: Record<string, unknown> = { remaining_principal: newPrincipal }
+            if (newPrincipal === 0) {
+              updatePayload.status = 'closed'
+            }
+            await supabase.from('loans').update(updatePayload as never).eq('id', input.loan_id)
+          }
+        } else if (input.type === 'interest' && input.loan_id) {
+          // Settle oldest unpaid due for this loan
+          const { data: unpaidDues } = await supabase
+            .from('dues')
+            .select('id, status, due_date')
+            .eq('loan_id', input.loan_id)
+            .in('status', ['overdue', 'pending'])
+            .order('due_date', { ascending: true })
+            .limit(1)
+
+          if (unpaidDues && unpaidDues.length > 0) {
+            await supabase.from('dues').update({ status: 'paid' } as never).eq('id', unpaidDues[0].id)
+          }
+        }
+
+        return payment as Payment
       },
     },
 
     // --- Dues ---
     dues: {
       async list(_orgId: string) {
-        const { data } = await supabase.from('dues').select('*')
+        const { data, error } = await supabase.from('dues').select('*')
+        if (error) throw error
         return (data || []) as Due[]
       },
       async update(id, input) {
-        const { error } = await supabase.from('dues').update(input as any).eq('id', id)
+        const { error } = await supabase.from('dues').update(input as never).eq('id', id)
         if (error) throw error
       },
       async create(input) {
-        const { data, error } = await supabase.from('dues').insert(input as any).select().single()
+        const { data, error } = await supabase.from('dues').insert(input as never).select().single()
         if (error) throw error
         return data as Due
       },
@@ -120,11 +153,12 @@ export function createSupabaseProvider(): DataProvider {
     // --- Notifications ---
     notifications: {
       async list(_orgId: string) {
-        const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        if (error) throw error
         return (data || []) as Notification[]
       },
       async create(input) {
-        const { data, error } = await supabase.from('notifications').insert(input as any).select().single()
+        const { data, error } = await supabase.from('notifications').insert(input as never).select().single()
         if (error) throw error
         return data as Notification
       },
@@ -133,11 +167,12 @@ export function createSupabaseProvider(): DataProvider {
     // --- Loan Assets ---
     loanAssets: {
       async list(loanId: string) {
-        const { data } = await supabase.from('loan_assets').select('*').eq('loan_id', loanId)
+        const { data, error } = await supabase.from('loan_assets').select('*').eq('loan_id', loanId)
+        if (error) throw error
         return (data || []) as LoanAsset[]
       },
       async add(input) {
-        const { data, error } = await supabase.from('loan_assets').insert(input as any).select().single()
+        const { data, error } = await supabase.from('loan_assets').insert(input as never).select().single()
         if (error) throw error
         return data as LoanAsset
       },
@@ -155,12 +190,17 @@ export function createSupabaseProvider(): DataProvider {
           contentType: options?.contentType,
         })
         if (error) throw error
-        const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-        return data.publicUrl
+        return path
       },
       async getUrl(bucket, path) {
-        const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 600)
-        return data?.signedUrl || ''
+        if (!path || path === '' || path === '/placeholder.svg') return '/placeholder.svg'
+        if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
+          return path
+        }
+        const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600)
+        if (data?.signedUrl) return data.signedUrl
+        const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(path)
+        return pubData.publicUrl || '/placeholder.svg'
       },
       async remove(bucket, paths) {
         await supabase.storage.from(bucket).remove(paths)
@@ -171,7 +211,7 @@ export function createSupabaseProvider(): DataProvider {
     async getOrgId(userId: string): Promise<string | null> {
       const { data } = await supabase.from('profiles').select('org_id').eq('id', userId).maybeSingle()
       if (data?.org_id) return data.org_id
-      // Create org if needed (existing behavior from useAuth)
+      // Create org if needed (idempotent RPC)
       await supabase.from('profiles').upsert({ id: userId })
       const { data: rpcOrgId } = await supabase.rpc('create_org_for_current_user', { p_name: 'My Organization' })
       return (rpcOrgId as unknown as string) || null

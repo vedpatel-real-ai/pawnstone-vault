@@ -2,19 +2,20 @@ import { Button } from '@/components/ui/button'
 import Papa from 'papaparse'
 import jsPDF from 'jspdf'
 
-type ExportProps<T> = {
+type ExportProps<T extends Record<string, unknown>> = {
   data: T[]
   filename: string
 }
 
-export function ExportButtons<T>({ data, filename }: ExportProps<T>) {
+export function ExportButtons<T extends Record<string, unknown>>({ data, filename }: ExportProps<T>) {
   const handleCSV = () => {
-    const csv = Papa.unparse(data as any)
+    const csv = Papa.unparse(data)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `${filename}.csv`
     link.click()
+    URL.revokeObjectURL(link.href)
   }
 
   const handlePDF = () => {
@@ -22,11 +23,10 @@ export function ExportButtons<T>({ data, filename }: ExportProps<T>) {
     doc.setFontSize(12)
     const lineHeight = 18
     let y = 40
-    const json = data as any[]
     doc.text(filename, 40, y)
     y += 24
-    json.forEach((row, idx) => {
-      const text = Object.entries(row).map(([k,v]) => `${k}: ${String(v)}`).join('  |  ')
+    data.forEach((row) => {
+      const text = Object.entries(row).map(([k, v]) => `${k}: ${String(v)}`).join('  |  ')
       doc.text(text.substring(0, 1100), 40, y)
       y += lineHeight
       if (y > 780) { doc.addPage(); y = 40 }

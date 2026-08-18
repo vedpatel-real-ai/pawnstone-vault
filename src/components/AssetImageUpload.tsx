@@ -2,246 +2,239 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Upload, X, Image, Loader2 } from 'lucide-react'
+import { Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getProvider } from '@/data'
 import { useAuth } from '@/hooks/useAuth'
+import { StorageImage } from '@/components/StorageImage'
+
+export interface AssetUploadItem {
+  id: string
+  url: string
+  name: string
+  file?: File
+}
 
 interface AssetImageUploadProps {
   loanId: string
-  images: Array<{ id: string; url: string; name: string }>
-  onImagesChange: (images: Array<{ id: string; url: string; name: string }>) => void
+  images: AssetUploadItem[]
+  onImagesChange: (images: AssetUploadItem[]) => void
   maxImages?: number
   disabled?: boolean
 }
 
-export function AssetImageUpload({ 
-  loanId, 
-  images, 
-  onImagesChange, 
+export function AssetImageUpload({
+  loanId,
+  images,
+  onImagesChange,
   maxImages = 10,
-  disabled = false 
+  disabled = false,
 }: AssetImageUploadProps) {
   const { toast } = useToast()
   const { orgId } = useAuth()
   const provider = getProvider()
   const [uploading, setUploading] = useState(false)
-  const [previews, setPreviews] = useState<Array<{ file: File; preview: string }>>([])
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (images.length + acceptedFiles.length > maxImages) {
-      toast({
-        title: 'Too many images',
-        description: `Maximum ${maxImages} images allowed`,
-        variant: 'destructive'
+  const isNewLoan = !loanId || loanId === 'temp'
+
+  const onDrop = useCallback(
+    async (acceptedFiles: File[]) => {
+      if (images.length + acceptedFiles.length > maxImages) {
+        toast({
+          title: 'Too many images',
+          description: `Maximum ${maxImages} images allowed`,
+          variant: 'destructive',
+        })
+        return
+      }
+
+      // Validate files
+      const validFiles = acceptedFiles.filter(file => {
+        if (!file.type.match(/^image\/(jpeg|jpg|png|webp)$/)) {
+          toast({
+            title: 'Invalid file type',
+            description: `${file.name} is not a JPEG, PNG, or WebP image`,
+            variant: 'destructive',
+          })
+          return false
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          toast({
+            title: 'File too large',
+            description: `${file.name} exceeds 5MB limit`,
+            variant: 'destructive',
+          })
+          return false
+        }
+        return true
       })
-      return
-    }
 
-    // Validate files
-    const validFiles = acceptedFiles.filter(file => {
-      if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
-        toast({
-          title: 'Invalid file type',
-          description: `${file.name} is not a JPEG or PNG image`,
-          variant: 'destructive'
-        })
-        return false
-      }
-      if (file.size > 3 * 1024 * 1024) {
-        toast({
-          title: 'File too large',
-          description: `${file.name} is larger than 3MB`,
-          variant: 'destructive'
-        })
-        return false
-      }
-      return true
-    })
+      if (validFiles.length === 0) return
 
-    // Create previews
-    const newPreviews = validFiles.map(file => ({
-      file,
-      preview: URL.createObjectURL(file)
-    }))
-    
-    setPreviews(prev => [...prev, ...newPreviews])
-  }, [images.length, maxImages, toast])
+      if (isNewLoan) {
+        // Client-side staging: retain File objects & preview URLs without creating invalid temp bucket paths
+        const newItems: AssetUploadItem[] = validFiles.map(file => ({
+          id: `staged-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url: URL.createObjectURL(file),
+          name: file.name,
+          file,
+        }))
+        onImagesChange([...images, ...newItems])
+      } else {
+        // Existing loan: upload directly under loanId
+        setUploading(true)
+        try {
+          const uploadedItems: AssetUploadItem[] = []
+          for (const file of validFiles) {
+            const fileExt = file.name.split('.').pop() || 'jpg'
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+            const filePath = `${loanId}/${fileName}`
+
+            const storageKey = await provider.storage.upload('loan_assets', filePath, file, {
+              upsert: true,
+              contentType: file.type || 'image/jpeg',
+            })
+
+            let assetId = `asset-${Date.now()}`
+            if (orgId) {
+              const asset = await provider.loanAssets.add({
+                loan_id: loanId,
+                file_url: storageKey,
+                file_name: file.name,
+                file_size: file.size,
+                org_id: orgId,
+              })
+              assetId = asset.id
+            }
+
+            uploadedItems.push({
+              id: assetId,
+              url: storageKey,
+              name: file.name,
+            })
+          }
+
+          onImagesChange([...images, ...uploadedItems])
+          toast({
+            title: 'Images uploaded',
+            description: `${uploadedItems.length} image(s) attached successfully`,
+          })
+        } catch (error: unknown) {
+          console.error('Upload error:', error)
+          const msg = error instanceof Error ? error.message : 'Failed to upload images. Please try again.'
+          toast({
+            title: 'Upload failed',
+            description: msg,
+            variant: 'destructive',
+          })
+        } finally {
+          setUploading(false)
+        }
+      }
+    },
+    [images, isNewLoan, loanId, maxImages, onImagesChange, orgId, provider, toast]
+  )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': ['.jpeg', '.jpg', '.png'] },
-    disabled: disabled || uploading
+    accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp'] },
+    disabled: disabled || uploading,
   })
 
-  const uploadImages = async () => {
-    if (previews.length === 0) return
-
-    setUploading(true)
-    const uploadedImages = []
-
+  const removeImage = async (item: AssetUploadItem) => {
     try {
-      for (const preview of previews) {
-        const fileExt = preview.file.name.split('.').pop() || 'jpg'
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-        const filePath = `${loanId}/${fileName}`
-
-        const publicUrl = await provider.storage.upload('loan_assets', filePath, preview.file, {
-          upsert: true,
-          contentType: preview.file.type || 'image/jpeg'
-        })
-
-        // If this is an existing loan, save to loan_assets table immediately
-        let assetId = `${Date.now()}-${Math.random()}`
-        if (loanId !== 'temp' && orgId) {
-          const asset = await provider.loanAssets.add({
-            loan_id: loanId,
-            file_url: publicUrl,
-            file_name: preview.file.name,
-            file_size: preview.file.size,
-            org_id: orgId
-          })
-          assetId = asset.id
-        }
-
-        uploadedImages.push({
-          id: assetId,
-          url: publicUrl,
-          name: preview.file.name
-        })
+      // If it was a staged blob URL, revoke it
+      if (item.file && item.url.startsWith('blob:')) {
+        URL.revokeObjectURL(item.url)
+      } else if (!isNewLoan && orgId) {
+        await provider.storage.remove('loan_assets', [item.url])
+        await provider.loanAssets.remove(item.id)
       }
 
-      onImagesChange([...images, ...uploadedImages])
-      setPreviews([])
-      
-      toast({
-        title: 'Images uploaded',
-        description: `${uploadedImages.length} image(s) processed successfully`
-      })
-    } catch (error) {
-      console.error('Upload error:', error)
-      toast({
-        title: 'Upload failed',
-        description: 'Failed to upload some images. Please try again.',
-        variant: 'destructive'
-      })
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const removePreview = (index: number) => {
-    setPreviews(prev => {
-      URL.revokeObjectURL(prev[index].preview)
-      return prev.filter((_, i) => i !== index)
-    })
-  }
-
-  const removeImage = async (imageId: string, imageUrl: string) => {
-    try {
-      if (loanId !== 'temp') {
-        await provider.storage.remove('loan_assets', [imageUrl])
-        await provider.loanAssets.remove(imageId)
-      }
-
-      onImagesChange(images.filter(img => img.id !== imageId))
-      
+      onImagesChange(images.filter(img => img.id !== item.id))
       toast({
         title: 'Image removed',
-        description: 'Image deleted successfully'
+        description: `${item.name} removed`,
       })
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Delete error:', error)
       toast({
         title: 'Delete failed',
         description: 'Failed to delete image',
-        variant: 'destructive'
+        variant: 'destructive',
       })
     }
   }
 
   return (
     <div className="space-y-4">
-      {/* Upload Area */}
+      {/* Upload Dropzone */}
       <div
         {...getRootProps()}
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors",
-          isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25",
-          disabled || uploading ? "opacity-50 cursor-not-allowed" : "hover:border-primary hover:bg-primary/5"
+          'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
+          isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25',
+          disabled || uploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary hover:bg-primary/5'
         )}
       >
         <input {...getInputProps()} />
-        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-        {isDragActive ? (
-          <p>Drop the images here...</p>
+        {uploading ? (
+          <div className="flex flex-col items-center">
+            <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-primary" />
+            <p className="font-medium">Uploading images...</p>
+          </div>
         ) : (
           <div>
-            <p className="font-medium">Click to upload or drag and drop</p>
-            <p className="text-sm text-muted-foreground">JPEG, PNG up to 3MB each</p>
+            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="font-medium">Click to upload collateral photos or drag and drop</p>
+            <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, WebP up to 5MB each (Max {maxImages})</p>
           </div>
         )}
       </div>
 
-      {/* Preview Images */}
-      {previews.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium">Ready to upload:</h4>
-            <Button onClick={uploadImages} disabled={uploading}>
-              {uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                `Upload ${previews.length} images`
-              )}
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-            {previews.map((preview, index) => (
-              <div key={index} className="relative group">
-                <img
-                  src={preview.preview}
-                  alt="Preview"
-                  className="w-full h-24 object-cover rounded-lg"
-                />
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => removePreview(index)}
-                >
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Uploaded Images */}
+      {/* Uploaded / Staged Images Grid */}
       {images.length > 0 && (
         <div className="space-y-3">
-          <h4 className="font-medium">Asset Images ({images.length}):</h4>
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-            {images.map((image) => (
-              <div key={image.id} className="relative group">
-                <img
-                  src={image.url}
-                  alt={image.name}
-                  className="w-full h-24 object-cover rounded-lg"
-                />
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium">Pledged Asset Photos ({images.length})</h4>
+            {isNewLoan && (
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                Staged for save
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {images.map((img) => (
+              <div key={img.id} className="relative group border rounded-lg overflow-hidden bg-muted/30">
+                {img.url.startsWith('blob:') || img.url.startsWith('http') ? (
+                  <img
+                    src={img.url}
+                    alt={img.name}
+                    className="w-full h-24 object-cover"
+                  />
+                ) : (
+                  <StorageImage
+                    bucket="loan_assets"
+                    path={img.url}
+                    alt={img.name}
+                    className="w-full h-24 object-cover"
+                  />
+                )}
+                <div className="p-1.5 bg-background/90 text-xs truncate border-t font-mono">
+                  {img.name}
+                </div>
                 <Button
                   size="sm"
                   variant="destructive"
-                  className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => removeImage(image.id, image.url)}
-                  disabled={disabled}
+                  className="absolute top-1 right-1 w-6 h-6 p-0 opacity-80 hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeImage(img)
+                  }}
+                  disabled={disabled || uploading}
+                  title="Remove image"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </Button>
               </div>
             ))}
@@ -249,10 +242,10 @@ export function AssetImageUpload({
         </div>
       )}
 
-      {images.length === 0 && previews.length === 0 && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Image className="w-4 h-4" />
-          At least one asset image is required
+      {images.length === 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ImageIcon className="w-4 h-4" />
+          Collateral verification photos are recommended for vault records
         </div>
       )}
     </div>

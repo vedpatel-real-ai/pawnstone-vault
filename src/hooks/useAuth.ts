@@ -20,12 +20,13 @@ export function useAuth() {
     return unsub
   }, [provider])
 
+  const userId = session?.user?.id
   useEffect(() => {
-    if (!session?.user) { setOrgId(null); return }
-    provider.getOrgId(session.user.id).then((id) => {
+    if (!userId) { setOrgId(null); return }
+    provider.getOrgId(userId).then((id) => {
       if (id) setOrgId(id)
     })
-  }, [session?.user?.id, provider])
+  }, [userId, provider])
 
   // Generate dues on login for demo mode
   useEffect(() => {

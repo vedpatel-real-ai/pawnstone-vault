@@ -7,7 +7,7 @@ const VERSION = 'v1'
 const prefix = (key: string) => `pawntrack-demo-${VERSION}:${key}`
 
 // In-memory fallback map for environments without IndexedDB/WebStorage (e.g. Node test runners)
-const memoryFallback = new Map<string, any>()
+const memoryFallback = new Map<string, unknown>()
 
 interface StorageAdapter {
   getItem<T>(key: string): Promise<T | null>

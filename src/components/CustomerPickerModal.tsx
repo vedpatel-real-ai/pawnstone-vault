@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { CustomerAvatar } from '@/components/StorageImage'
 import { Badge } from '@/components/ui/badge'
-import { Search, User, Phone, CreditCard } from 'lucide-react'
+import { Search, Phone, CreditCard } from 'lucide-react'
 
 interface Customer {
   id: string
@@ -64,12 +64,12 @@ export function CustomerPickerModal({ open, onClose, onSelect, customers }: Cust
                 className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
                 onClick={() => handleSelect(customer)}
               >
-                <Avatar className="w-12 h-12">
-                  <AvatarImage src={customer.profile_photo_url} />
-                  <AvatarFallback>
-                    <User className="w-6 h-6" />
-                  </AvatarFallback>
-                </Avatar>
+                <CustomerAvatar
+                  photoPath={customer.profile_photo_url}
+                  name={customer.name}
+                  className="w-12 h-12"
+                  iconSize="w-6 h-6"
+                />
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
