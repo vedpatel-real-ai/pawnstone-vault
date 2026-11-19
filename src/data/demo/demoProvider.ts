@@ -126,8 +126,6 @@ export function createDemoProvider(): DataProvider {
         }
 
         await db.customers.setAll((await db.customers.getAll()).filter(c => c.id !== id))
-
-
       },
     },
 

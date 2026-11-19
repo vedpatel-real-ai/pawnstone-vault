@@ -100,7 +100,6 @@ export function AssetImageUpload({
             onImagesChange([...images,...uploadedItems])
           }
 
-          onImagesChange([...images, ...uploadedItems])
           toast({
             title: 'Images uploaded',
             description: `${uploadedItems.length} image(s) attached successfully`,

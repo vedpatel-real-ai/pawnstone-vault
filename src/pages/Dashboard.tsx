@@ -324,8 +324,8 @@ export default function Dashboard() {
       })
       qc.invalidateQueries({ queryKey: ['notifications'] })
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to send reminder'
-      toast({ title: 'Failed to send reminder', description: msg, variant: 'destructive' })
+      const msg = err instanceof Error ? err.message : 'Failed to record reminder'
+      toast({ title: 'Failed to record reminder', description: msg, variant: 'destructive' })
     }
   }
 
@@ -367,7 +367,7 @@ export default function Dashboard() {
             <DollarSign className="w-4 h-4 mr-1.5" /> Record Payment
           </Button>
           <Button size="sm" variant="secondary" onClick={() => setOpenReminderModal(true)}>
-            <Send className="w-3.5 h-3.5 mr-1.5" /> Send Reminder
+            <Send className="w-3.5 h-3.5 mr-1.5" /> Record reminder
           </Button>
         </div>
       </div>
@@ -855,11 +855,11 @@ export default function Dashboard() {
                         >
                           {alreadySent ? (
                             <>
-                              <CheckCircle2 className="w-3 h-3 mr-1" /> Reminded
+                              <CheckCircle2 className="w-3 h-3 mr-1" /> Recorded
                             </>
                           ) : (
                             <>
-                              <Send className="w-3 h-3 mr-1" /> Remind
+                              <Send className="w-3 h-3 mr-1" /> Record reminder
                             </>
                           )}
                         </Button>
@@ -1173,11 +1173,11 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Quick Action Modal: Send Reminder */}
+      {/* Quick Action Modal: Record reminder */}
       <Dialog open={openReminderModal} onOpenChange={setOpenReminderModal}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Send Delinquency Reminder</DialogTitle>
+            <DialogTitle>Record an internal reminder</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             {(data?.alerts.overdueLoansList || []).map((o) => (
@@ -1193,7 +1193,7 @@ export default function Dashboard() {
                   disabled={sentReminders.has(o.loan_id)}
                   onClick={() => handleSendReminder(o.loan_id, o.customer_name)}
                 >
-                  {sentReminders.has(o.loan_id) ? 'Dispatched' : 'Send'}
+                  {sentReminders.has(o.loan_id) ? 'Recorded' : 'Record'}
                 </Button>
               </div>
             ))}
