@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
-import { initOfflineQueue, processQueue } from './lib/offlineQueue'
+import localforage from 'localforage'
 
 const root = createRoot(document.getElementById('root')!)
 root.render(<App />)
@@ -13,8 +13,5 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-// Initialize offline queue
-initOfflineQueue()
-// Attempt processing at startup
-processQueue().catch(() => {})
-
+// Legacy operations did not identify an owner. Never replay them after an upgrade.
+void localforage.removeItem('pawntrack-offline-ops').catch(() => console.warn('Legacy offline storage unavailable'))
