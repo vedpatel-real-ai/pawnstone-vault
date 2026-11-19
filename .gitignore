@@ -26,3 +26,8 @@ test-results/
 playwright-report/
 .cache/
 
+
+supabase/.branches/
+supabase/.temp/
+test-results/
+playwright-report/

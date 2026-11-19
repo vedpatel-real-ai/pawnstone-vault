@@ -28,14 +28,7 @@ export function useStorageUrl(path?: string | null, bucket: string = 'customers'
       return
     }
 
-    // Direct web or blob URLs can be used immediately
-    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:')) {
-      setUrl(path)
-      setLoading(false)
-      setError(false)
-      return
-    }
-
+    setUrl(null)
     setLoading(true)
     const provider = getProvider()
 
@@ -48,8 +41,7 @@ export function useStorageUrl(path?: string | null, bucket: string = 'customers'
           setError(false)
         }
       })
-      .catch((err) => {
-        console.warn('Failed to resolve storage URL for path:', path, err)
+      .catch(() => {
         if (active) {
           setUrl('/placeholder.svg')
           setLoading(false)

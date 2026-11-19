@@ -22,7 +22,8 @@ export function createSupabaseProvider(): DataProvider {
     },
 
     async signOut() {
-      await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
     },
 
     onAuthStateChange(callback: (session: AppSession | null) => void): () => void {
@@ -194,27 +195,21 @@ export function createSupabaseProvider(): DataProvider {
       },
       async getUrl(bucket, path) {
         if (!path || path === '' || path === '/placeholder.svg') return '/placeholder.svg'
-        if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
-          return path
-        }
-        const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600)
-        if (data?.signedUrl) return data.signedUrl
-        const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(path)
-        return pubData.publicUrl || '/placeholder.svg'
+        if (/^[a-z]+:/i.test(path)) return '/placeholder.svg'
+        const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300)
+        return error ? '/placeholder.svg' : data.signedUrl
       },
       async remove(bucket, paths) {
-        await supabase.storage.from(bucket).remove(paths)
+        const { error } = await supabase.storage.from(bucket).remove(paths)
+        if (error) throw error
       },
     },
 
     // --- Org ---
     async getOrgId(userId: string): Promise<string | null> {
-      const { data } = await supabase.from('profiles').select('org_id').eq('id', userId).maybeSingle()
-      if (data?.org_id) return data.org_id
-      // Create org if needed (idempotent RPC)
-      await supabase.from('profiles').upsert({ id: userId })
-      const { data: rpcOrgId } = await supabase.rpc('create_org_for_current_user', { p_name: 'My Organization' })
-      return (rpcOrgId as unknown as string) || null
+      const { data, error } = await supabase.rpc('create_org_for_current_user', { p_name: 'My Organization' })
+      if (error) throw error
+      return data
     },
   }
 

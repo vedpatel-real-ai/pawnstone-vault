@@ -5,10 +5,8 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { getProvider } from '@/data'
 
 export default function Signup() {
-  const { toast } = useToast()
   const { session } = useAuth()
   const demo = isDemo()
 
@@ -30,7 +28,6 @@ export default function Signup() {
     )
   }
 
-  // Supabase mode — original signup flow preserved
   return <SupabaseSignup />
 }
 
@@ -47,18 +44,14 @@ function SupabaseSignup() {
     try {
       // Import supabase only in supabase mode
       const { supabase } = await import('@/integrations/supabase/client')
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
       if (error) {
         setLoading(false)
         toast({ title: 'Signup failed', description: error.message, variant: 'destructive' })
         return
       }
-      if (data?.user) {
-        const { data: org } = await supabase.from('organizations').select('id').limit(1).single()
-        if (org?.id) await supabase.from('profiles').upsert({ id: data.user.id, org_id: org.id, full_name: fullName })
-      }
       setLoading(false)
-      toast({ title: 'Account created', description: 'You can now sign in.' })
+      toast({ title: 'Account created', description: data.session ? 'Signed in.' : 'Check your email to confirm your address.' })
       window.location.href = '/login'
     } catch (err: unknown) {
       setLoading(false)
