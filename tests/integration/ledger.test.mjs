@@ -5,7 +5,7 @@ import { actor, ok, originate } from './local.mjs'
 
 let shop
 before(async () => { shop = await actor() })
-const today = new Date().toISOString().slice(0,10)
+const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
 const loan = () => originate(shop,{start_date:today})
 function post(l,amount,type,request = randomUUID(),client = shop.client) {
   return client.rpc('post_payment',{p_loan:l.id,p_request:request,p_amount:amount,p_type:type,p_notes:'Fixture'})

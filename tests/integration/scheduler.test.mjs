@@ -40,7 +40,7 @@ test('one worker claims each eligible email without contacting a mail service', 
   const shop = await actor()
   ok(await shop.client.from('customers').update({email:'fixture@example.invalid'}).eq('id',shop.customer.id))
   const loan = await originate(shop)
-  const today = new Date().toISOString().slice(0,10)
+  const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
   const due = ok(await admin.from('dues').upsert({org_id:shop.org,loan_id:loan.id,due_date:today,due_type:'interest',amount:20},{onConflict:'loan_id,due_date,due_type'}).select().single())
   const n = ok(await admin.from('notifications').insert({org_id:shop.org,loan_id:loan.id,due_id:due.id,title:'Fixture'}).select().single())
   const claims = (await Promise.all([admin.rpc('claim_due_mail'),admin.rpc('claim_due_mail')])).flatMap(ok)
