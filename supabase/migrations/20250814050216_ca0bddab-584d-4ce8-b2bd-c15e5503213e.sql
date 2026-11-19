@@ -12,4 +12,3 @@ CREATE TABLE IF NOT EXISTS public.loan_assets (
 
 -- Enable RLS on loan_assets
 ALTER TABLE public.loan_assets ENABLE ROW LEVEL SECURITY;
-

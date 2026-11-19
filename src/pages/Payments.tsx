@@ -132,8 +132,8 @@ export default function Payments() {
           <CardContent>
             <form onSubmit={addPayment} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Select Loan *</label>
-                <select
+                <label htmlFor="payment-loan" className="text-sm font-medium">Select Loan *</label>
+                <select id="payment-loan"
                   value={form.loan_id}
                   onChange={(e) => {
                     const lId = e.target.value
@@ -157,8 +157,8 @@ export default function Payments() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Payment Type *</label>
-                <select
+                <label htmlFor="payment-type" className="text-sm font-medium">Payment Type *</label>
+                <select id="payment-type"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                   className="w-full border rounded-md h-10 px-3 bg-background text-sm"
@@ -170,8 +170,8 @@ export default function Payments() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Amount (₹) *</label>
-                <Input
+                <label htmlFor="payment-amount" className="text-sm font-medium">Amount (₹) *</label>
+                <Input id="payment-amount"
                   min="0.01" step="0.01" placeholder="Payment amount"
                   type="number"
                   value={form.amount}
@@ -181,8 +181,8 @@ export default function Payments() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Notes / Reference</label>
-                <Input
+                <label htmlFor="payment-notes" className="text-sm font-medium">Notes / Reference</label>
+                <Input id="payment-notes"
                   placeholder="e.g. UPI Ref #4902194 or Cash Receipt"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}

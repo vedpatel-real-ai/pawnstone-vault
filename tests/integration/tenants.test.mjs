@@ -49,6 +49,14 @@ test('private storage scopes upload, sign, update and removal to the parent row'
     const own = b.client.storage.from(bucket), other = a.client.storage.from(bucket)
     const path = parent+'/synthetic.txt'
     ok(await own.upload(path,new Blob(['fixture'])))
+    if (bucket==='customers') {
+      const customer = ok(await b.client.from('customers').insert({name:'Synthetic media only'}).select().single())
+      const object = customer.id+'/fixture.txt'
+      ok(await own.upload(object,new Blob(['fixture'])))
+      assert.ok((await b.client.from('customers').delete().eq('id',customer.id)).error)
+      ok(await own.remove([object]))
+      ok(await b.client.from('customers').delete().eq('id',customer.id).select().single())
+    }
     ok(await own.update(path,new Blob(['updated'])))
     assert.ok((await other.upload(parent+'/foreign.txt',new Blob(['fixture']))).error)
     assert.ok((await other.update(path,new Blob(['changed']))).error)

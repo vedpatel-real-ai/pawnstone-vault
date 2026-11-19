@@ -157,6 +157,8 @@ export function createDemoProvider(): DataProvider {
             !(loan.interest_rate_percent >= 0) || !Number.isFinite(loan.interest_rate_percent) ||
             !/^\d{4}-\d{2}-\d{2}$/.test(loan.start_date) ||
             loan.start_date > businessDate()) throw Error('Invalid loan terms')
+        if (loan.due_date && loan.due_date < loan.start_date) throw Error('Maturity date precedes origination')
+        if (loan.asset_value !== null && !(loan.asset_value >= 0 && Number.isFinite(loan.asset_value))) throw Error('Invalid collateral value')
         if (!(await db.customers.getAll()).some(c => c.id === loan.customer_id && c.org_id === loan.org_id)) throw Error('Unknown borrower')
         loan.remaining_principal = loan.loan_amount
         loan.status = 'active'

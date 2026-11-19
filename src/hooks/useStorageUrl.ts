@@ -54,4 +54,3 @@ export function useStorageUrl(path?: string | null, bucket: string = 'customers'
 
   return { url, loading, error }
 }
-

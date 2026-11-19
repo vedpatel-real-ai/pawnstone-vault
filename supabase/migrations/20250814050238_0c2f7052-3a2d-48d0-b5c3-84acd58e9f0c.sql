@@ -15,8 +15,8 @@ ALTER TABLE public.loan_assets ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policy for loan_assets
 DROP POLICY IF EXISTS "org_member_access_loan_assets" ON public.loan_assets;
-CREATE POLICY "org_member_access_loan_assets" ON public.loan_assets 
-FOR ALL 
+CREATE POLICY "org_member_access_loan_assets" ON public.loan_assets
+FOR ALL
 USING (org_id = ( SELECT profiles.org_id FROM profiles WHERE profiles.id = auth.uid()));
 
 -- Add trigger for org_id enforcement on loan_assets
@@ -27,49 +27,49 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('loan_assets', 'loan_asse
 
 -- Create storage policies for loan_assets bucket
 DROP POLICY IF EXISTS "Users can view their org loan assets" ON storage.objects;
-CREATE POLICY "Users can view their org loan assets" ON storage.objects 
-FOR SELECT 
+CREATE POLICY "Users can view their org loan assets" ON storage.objects
+FOR SELECT
 USING (
-  bucket_id = 'loan_assets' 
+  bucket_id = 'loan_assets'
   AND (storage.foldername(name))[1] IN (
-    SELECT loans.id::text 
-    FROM loans 
+    SELECT loans.id::text
+    FROM loans
     WHERE loans.org_id = (SELECT profiles.org_id FROM profiles WHERE profiles.id = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "Users can upload their org loan assets" ON storage.objects;
-CREATE POLICY "Users can upload their org loan assets" ON storage.objects 
-FOR INSERT 
+CREATE POLICY "Users can upload their org loan assets" ON storage.objects
+FOR INSERT
 WITH CHECK (
-  bucket_id = 'loan_assets' 
+  bucket_id = 'loan_assets'
   AND (storage.foldername(name))[1] IN (
-    SELECT loans.id::text 
-    FROM loans 
+    SELECT loans.id::text
+    FROM loans
     WHERE loans.org_id = (SELECT profiles.org_id FROM profiles WHERE profiles.id = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "Users can update their org loan assets" ON storage.objects;
-CREATE POLICY "Users can update their org loan assets" ON storage.objects 
-FOR UPDATE 
+CREATE POLICY "Users can update their org loan assets" ON storage.objects
+FOR UPDATE
 USING (
-  bucket_id = 'loan_assets' 
+  bucket_id = 'loan_assets'
   AND (storage.foldername(name))[1] IN (
-    SELECT loans.id::text 
-    FROM loans 
+    SELECT loans.id::text
+    FROM loans
     WHERE loans.org_id = (SELECT profiles.org_id FROM profiles WHERE profiles.id = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "Users can delete their org loan assets" ON storage.objects;
-CREATE POLICY "Users can delete their org loan assets" ON storage.objects 
-FOR DELETE 
+CREATE POLICY "Users can delete their org loan assets" ON storage.objects
+FOR DELETE
 USING (
-  bucket_id = 'loan_assets' 
+  bucket_id = 'loan_assets'
   AND (storage.foldername(name))[1] IN (
-    SELECT loans.id::text 
-    FROM loans 
+    SELECT loans.id::text
+    FROM loans
     WHERE loans.org_id = (SELECT profiles.org_id FROM profiles WHERE profiles.id = auth.uid())
   )
 );

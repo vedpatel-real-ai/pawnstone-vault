@@ -314,7 +314,7 @@ export default function Dashboard() {
         loan_id: loanId,
         title: `Payment Reminder: ${customerName}`,
         body: `Internal reminder recorded for delinquent loan #${loanId.slice(0, 8)}.`,
-        sent_at: new Date().toISOString(),
+        sent_at: null,
         read: false,
       })
       setSentReminders(prev => new Set(prev).add(loanId))

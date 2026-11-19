@@ -15,6 +15,10 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 out = Path('.cache/verification')
+if out.exists():
+    archive = out.parent/'verification-history'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+    archive.parent.mkdir(parents=True,exist_ok=True)
+    out.rename(archive)
 out.mkdir(parents=True, exist_ok=True)
 cli = os.environ.get('PAWNTRACK_CLI', 'supabase')
 def output(*cmd):
@@ -83,7 +87,7 @@ def run():
         proc=subprocess.Popen([cli,'functions','serve','generate-dues','--env-file',str(envfile)],stdout=log,stderr=log,start_new_session=True)
         try:
             wait_edge(proc)
-            for name in ('tenants','ledger','scheduler','edge'):
+            for name in ('tenants','ledger','scheduler','edge','session'):
                 check(name,['node','--test','--test-reporter=junit','--test-reporter-destination='+str(out/(name+'.xml')),
                     f'tests/integration/{name}.test.mjs'])
                 suite(name)

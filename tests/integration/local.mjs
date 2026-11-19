@@ -8,6 +8,7 @@ const status = execFileSync(process.env.PAWNTRACK_CLI || 'supabase', ['status', 
 const env = Object.fromEntries([...status.matchAll(/^(\w+)="([^"]*)"$/gm)].map(m => [m[1],m[2]]))
 if (env.API_URL !== url) throw Error('Expected the isolated PawnTrack loopback stack')
 const options = { auth: { persistSession: false, autoRefreshToken: false } }
+export const publicKey = env.ANON_KEY
 export const admin = createClient(url, env.SERVICE_ROLE_KEY, options)
 export const guest = createClient(url, env.ANON_KEY, options)
 export function ok(result) {
@@ -24,7 +25,7 @@ export async function actor() {
   if (memberships[0] !== memberships[1]) throw Error('Provisioning returned two organizations')
   const org = memberships[0]
   const customer = ok(await client.from('customers').insert({name:'Synthetic customer',org_id:org}).select().single())
-  return { client, user, org, customer }
+  return { client, user, org, customer, email, password }
 }
 export async function originate(actor, overrides = {}) {
   return ok(await actor.client.from('loans').insert({
