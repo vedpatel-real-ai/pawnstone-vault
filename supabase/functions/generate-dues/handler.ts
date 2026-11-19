@@ -18,7 +18,18 @@ export function duesHandler(settings: Settings, run: (url: string, key: string) 
       return reply(401, 'Unauthorized')
     }
     // No request parameters. The scheduler always uses the database clock.
-    if (req.body !== null) return reply(400, 'Expected an empty body')
+    if (req.body) {
+      const reader = req.body.getReader()
+      try {
+        const { done } = await reader.read()
+        if (!done) {
+          await reader.cancel()
+          return reply(400, 'Expected an empty body')
+        }
+      } catch {
+        return reply(400, 'Invalid request body')
+      }
+    }
     try {
       return Response.json(await run(url, serviceKey))
     } catch {

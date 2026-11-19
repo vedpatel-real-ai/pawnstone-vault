@@ -112,8 +112,8 @@ export function editLedger<T>(apply: (ledger: Ledger) => T): Promise<T> {
     await dataStore.setItem(prefix('ledger'), ledger)
     return result
   }
-  const work = pending.then(() => typeof navigator !== 'undefined' && navigator.locks
-    ? navigator.locks.request('pawntrack-demo-ledger', commit) : commit())
+  const work = pending.then(async () => typeof navigator !== 'undefined' && navigator.locks
+    ? await navigator.locks.request('pawntrack-demo-ledger', commit) : await commit())
   pending = work.then(() => undefined, () => undefined)
   return work
 }

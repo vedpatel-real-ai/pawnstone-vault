@@ -1,3 +1,4 @@
+import { businessDate } from '@/lib/businessDate'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createDemoProvider } from './demoProvider'
 import { getDemoOrgId } from './demoSeed'
@@ -88,7 +89,7 @@ describe('DemoProvider', () => {
       loan_amount: 30000,
       remaining_principal: 30000,
       interest_rate_percent: 2.0,
-      start_date: new Date().toISOString().slice(0,10),
+      start_date: businessDate(),
       due_date: '2026-06-01',
       next_due_date: '2026-02-01',
       term_months: 6,
@@ -121,7 +122,7 @@ describe('DemoProvider', () => {
       loan_amount: 50000,
       remaining_principal: 50000,
       interest_rate_percent: 2.0,
-      start_date: new Date().toISOString().slice(0,10),
+      start_date: businessDate(),
       due_date: '2026-06-01',
       next_due_date: '2026-02-01',
       term_months: 6,
@@ -159,7 +160,7 @@ describe('DemoProvider', () => {
     updatedLoan = await provider.loans.get(loan.id)
     expect(updatedLoan?.remaining_principal).toBe(0)
     expect(updatedLoan?.status).toBe('active')
-    await provider.payments.create({ org_id:orgId,loan_id:loan.id,request_id:crypto.randomUUID(),amount:1000,type:'interest',notes:null,payment_date:new Date().toISOString().slice(0,10) })
+    await provider.payments.create({ org_id:orgId,loan_id:loan.id,request_id:crypto.randomUUID(),amount:1000,type:'interest',notes:null,payment_date:businessDate() })
     expect((await provider.loans.get(loan.id))?.status).toBe('closed')
   })
 
@@ -174,7 +175,7 @@ describe('DemoProvider', () => {
       loan_amount: 100000,
       remaining_principal: 100000,
       interest_rate_percent: 2.5,
-      start_date: new Date().toISOString().slice(0,10),
+      start_date: businessDate(),
       due_date: '2026-12-01',
       next_due_date: '2026-02-01',
       term_months: 12,

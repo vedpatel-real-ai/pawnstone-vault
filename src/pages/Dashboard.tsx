@@ -1,3 +1,4 @@
+import { businessDate } from '@/lib/businessDate'
 import { usePaymentPosting } from '@/hooks/usePaymentPosting'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -84,7 +85,7 @@ export default function Dashboard() {
     customer_id: '',
     loan_amount: '',
     interest_rate_percent: '2.0',
-    start_date: format(now, 'yyyy-MM-dd'),
+    start_date: businessDate(),
     due_date: format(addMonths(now, 12), 'yyyy-MM-dd'),
     asset_type: 'gold',
     asset_description: '',
@@ -101,7 +102,7 @@ export default function Dashboard() {
   const [sentReminders, setSentReminders] = useState<Set<string>>(new Set())
 
   // Core Data Query
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dashboard', orgId, trendMonths],
     queryFn: async () => {
       if (!orgId) return null
@@ -263,7 +264,7 @@ export default function Dashboard() {
         customer_id: '',
         loan_amount: '',
         interest_rate_percent: '2.0',
-        start_date: format(now, 'yyyy-MM-dd'),
+        start_date: businessDate(),
         due_date: format(addMonths(now, 12), 'yyyy-MM-dd'),
         asset_type: 'gold',
         asset_description: '',
@@ -335,6 +336,7 @@ export default function Dashboard() {
   const originationData = data?.charts.originationTrend || []
   const assetMixData = data?.charts.assetMix || []
 
+  if (isError) return <p role="alert">Could not load portfolio data. <button onClick={() => refetch()}>Retry</button></p>
   return (
     <div className="space-y-6">
       {/* Header & Quick Action Bar */}
@@ -349,7 +351,7 @@ export default function Dashboard() {
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Real-time portfolio metrics, collateral audit, scheduled interest dues, and delinquency watch.
+            Portfolio metrics, collateral audit, scheduled interest dues, and delinquency watch.
           </p>
         </div>
 
@@ -375,6 +377,8 @@ export default function Dashboard() {
         {/* KPI 1: Active Loans */}
         <Card
           className="hover:border-primary/50 transition-all cursor-pointer group shadow-sm"
+          role="link" tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.click() }}
           onClick={() => navigate('/loans?status=active')}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -401,6 +405,8 @@ export default function Dashboard() {
           className={`hover:border-destructive/60 transition-all cursor-pointer group shadow-sm ${
             (k?.totalOverdueLoans || 0) > 0 ? 'border-destructive/30 bg-destructive/5' : ''
           }`}
+          role="link" tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.click() }}
           onClick={() => navigate('/loans?status=overdue')}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -435,6 +441,8 @@ export default function Dashboard() {
         {/* KPI 3: Interest Due This Month */}
         <Card
           className="hover:border-primary/50 transition-all cursor-pointer group shadow-sm"
+          role="link" tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.click() }}
           onClick={() => navigate(`/payments?dueMonth=${currentMonthStr}`)}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -459,6 +467,8 @@ export default function Dashboard() {
         {/* KPI 4: Interest Collected This Month */}
         <Card
           className="hover:border-primary/50 transition-all cursor-pointer group shadow-sm"
+          role="link" tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.click() }}
           onClick={() => navigate(`/payments?month=${currentMonthStr}`)}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -483,6 +493,8 @@ export default function Dashboard() {
         {/* KPI 5: Assets Held (Active + Overdue) */}
         <Card
           className="hover:border-primary/50 transition-all cursor-pointer group shadow-sm"
+          role="link" tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.click() }}
           onClick={() => navigate('/assets')}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -506,6 +518,8 @@ export default function Dashboard() {
         {/* KPI 6: Delinquent Borrowers */}
         <Card
           className="hover:border-primary/50 transition-all cursor-pointer group shadow-sm"
+          role="link" tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.click() }}
           onClick={() => navigate('/customers?overdue=true')}
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">

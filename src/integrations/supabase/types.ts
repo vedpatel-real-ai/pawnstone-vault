@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
-  }
   public: {
     Tables: {
       audit_logs: {
@@ -20,7 +15,7 @@ export type Database = {
           created_at: string | null
           id: string
           meta: Json | null
-          org_id: string | null
+          org_id: string
           user_id: string | null
         }
         Insert: {
@@ -28,7 +23,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           meta?: Json | null
-          org_id?: string | null
+          org_id?: string
           user_id?: string | null
         }
         Update: {
@@ -36,7 +31,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           meta?: Json | null
-          org_id?: string | null
+          org_id?: string
           user_id?: string | null
         }
         Relationships: [
@@ -60,7 +55,7 @@ export type Database = {
           id_proof_url: string | null
           name: string
           notes: string | null
-          org_id: string | null
+          org_id: string
           phone: string | null
           profile_photo_url: string | null
         }
@@ -74,7 +69,7 @@ export type Database = {
           id_proof_url?: string | null
           name: string
           notes?: string | null
-          org_id?: string | null
+          org_id?: string
           phone?: string | null
           profile_photo_url?: string | null
         }
@@ -88,7 +83,7 @@ export type Database = {
           id_proof_url?: string | null
           name?: string
           notes?: string | null
-          org_id?: string | null
+          org_id?: string
           phone?: string | null
           profile_photo_url?: string | null
         }
@@ -109,9 +104,10 @@ export type Database = {
           due_date: string
           due_type: string
           id: string
-          loan_id: string | null
-          org_id: string | null
-          status: Database["public"]["Enums"]["due_status"] | null
+          loan_id: string
+          org_id: string
+          paid_amount: number
+          status: Database["public"]["Enums"]["due_status"]
         }
         Insert: {
           amount: number
@@ -119,9 +115,10 @@ export type Database = {
           due_date: string
           due_type: string
           id?: string
-          loan_id?: string | null
-          org_id?: string | null
-          status?: Database["public"]["Enums"]["due_status"] | null
+          loan_id: string
+          org_id?: string
+          paid_amount?: number
+          status?: Database["public"]["Enums"]["due_status"]
         }
         Update: {
           amount?: number
@@ -129,24 +126,25 @@ export type Database = {
           due_date?: string
           due_type?: string
           id?: string
-          loan_id?: string | null
-          org_id?: string | null
-          status?: Database["public"]["Enums"]["due_status"] | null
+          loan_id?: string
+          org_id?: string
+          paid_amount?: number
+          status?: Database["public"]["Enums"]["due_status"]
         }
         Relationships: [
-          {
-            foreignKeyName: "dues_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loans"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "dues_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dues_org_id_loan_id_fkey"
+            columns: ["org_id", "loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["org_id", "id"]
           },
         ]
       }
@@ -168,7 +166,7 @@ export type Database = {
           file_url: string
           id?: string
           loan_id: string
-          org_id: string
+          org_id?: string
           uploaded_at?: string
         }
         Update: {
@@ -181,7 +179,15 @@ export type Database = {
           org_id?: string
           uploaded_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "loan_assets_org_id_loan_id_fkey"
+            columns: ["org_id", "loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
       }
       loans: {
         Row: {
@@ -189,17 +195,18 @@ export type Database = {
           asset_type: string | null
           asset_value: number | null
           created_at: string | null
-          customer_id: string | null
+          customer_id: string
           due_date: string | null
           id: string
           interest_rate_percent: number
           last_interest_calculated: string | null
           loan_amount: number
           next_due_date: string
-          org_id: string | null
+          notes: string | null
+          org_id: string
           remaining_principal: number
           start_date: string
-          status: Database["public"]["Enums"]["loan_status"] | null
+          status: Database["public"]["Enums"]["loan_status"]
           term_months: number | null
           updated_at: string | null
         }
@@ -208,17 +215,18 @@ export type Database = {
           asset_type?: string | null
           asset_value?: number | null
           created_at?: string | null
-          customer_id?: string | null
+          customer_id: string
           due_date?: string | null
           id?: string
           interest_rate_percent: number
           last_interest_calculated?: string | null
           loan_amount: number
           next_due_date: string
-          org_id?: string | null
+          notes?: string | null
+          org_id?: string
           remaining_principal: number
           start_date: string
-          status?: Database["public"]["Enums"]["loan_status"] | null
+          status?: Database["public"]["Enums"]["loan_status"]
           term_months?: number | null
           updated_at?: string | null
         }
@@ -227,27 +235,28 @@ export type Database = {
           asset_type?: string | null
           asset_value?: number | null
           created_at?: string | null
-          customer_id?: string | null
+          customer_id?: string
           due_date?: string | null
           id?: string
           interest_rate_percent?: number
           last_interest_calculated?: string | null
           loan_amount?: number
           next_due_date?: string
-          org_id?: string | null
+          notes?: string | null
+          org_id?: string
           remaining_principal?: number
           start_date?: string
-          status?: Database["public"]["Enums"]["loan_status"] | null
+          status?: Database["public"]["Enums"]["loan_status"]
           term_months?: number | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "loans_customer_id_fkey"
-            columns: ["customer_id"]
+            foreignKeyName: "loans_org_id_customer_id_fkey"
+            columns: ["org_id", "customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
-            referencedColumns: ["id"]
+            referencedColumns: ["org_id", "id"]
           },
           {
             foreignKeyName: "loans_org_id_fkey"
@@ -262,9 +271,12 @@ export type Database = {
         Row: {
           body: string | null
           created_at: string | null
+          due_id: string | null
           id: string
           loan_id: string | null
-          org_id: string | null
+          mail_attempted_at: string | null
+          mail_state: string | null
+          org_id: string
           read: boolean | null
           sent_at: string | null
           title: string
@@ -272,9 +284,12 @@ export type Database = {
         Insert: {
           body?: string | null
           created_at?: string | null
+          due_id?: string | null
           id?: string
           loan_id?: string | null
-          org_id?: string | null
+          mail_attempted_at?: string | null
+          mail_state?: string | null
+          org_id?: string
           read?: boolean | null
           sent_at?: string | null
           title: string
@@ -282,14 +297,24 @@ export type Database = {
         Update: {
           body?: string | null
           created_at?: string | null
+          due_id?: string | null
           id?: string
           loan_id?: string | null
-          org_id?: string | null
+          mail_attempted_at?: string | null
+          mail_state?: string | null
+          org_id?: string
           read?: boolean | null
           sent_at?: string | null
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_due_id_fkey"
+            columns: ["due_id"]
+            isOneToOne: true
+            referencedRelation: "dues"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_loan_id_fkey"
             columns: ["loan_id"]
@@ -303,6 +328,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_org_id_loan_id_fkey"
+            columns: ["org_id", "loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["org_id", "id"]
           },
         ]
       }
@@ -329,46 +361,52 @@ export type Database = {
           amount: number
           created_at: string | null
           id: string
-          loan_id: string | null
+          loan_id: string
           notes: string | null
-          org_id: string | null
+          org_id: string
           payment_date: string
-          type: Database["public"]["Enums"]["payment_type"] | null
+          posted_by: string | null
+          request_id: string | null
+          type: Database["public"]["Enums"]["payment_type"]
         }
         Insert: {
           amount: number
           created_at?: string | null
           id?: string
-          loan_id?: string | null
+          loan_id: string
           notes?: string | null
-          org_id?: string | null
+          org_id?: string
           payment_date?: string
-          type?: Database["public"]["Enums"]["payment_type"] | null
+          posted_by?: string | null
+          request_id?: string | null
+          type?: Database["public"]["Enums"]["payment_type"]
         }
         Update: {
           amount?: number
           created_at?: string | null
           id?: string
-          loan_id?: string | null
+          loan_id?: string
           notes?: string | null
-          org_id?: string | null
+          org_id?: string
           payment_date?: string
-          type?: Database["public"]["Enums"]["payment_type"] | null
+          posted_by?: string | null
+          request_id?: string | null
+          type?: Database["public"]["Enums"]["payment_type"]
         }
         Relationships: [
-          {
-            foreignKeyName: "payments_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loans"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "payments_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_org_id_loan_id_fkey"
+            columns: ["org_id", "loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["org_id", "id"]
           },
         ]
       }
@@ -409,26 +447,51 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      _create_enforce_org_trigger: {
-        Args: { _table: unknown }
-        Returns: undefined
-      }
-      assign_user_to_org: {
-        Args: { p_user_id: string; p_org_id: string }
-        Returns: undefined
+      claim_due_mail: {
+        Args: never
+        Returns: {
+          message: string
+          notice_id: string
+          recipient: string
+        }[]
       }
       create_org_for_current_user: {
         Args: { p_name?: string }
         Returns: string
       }
-      current_user_org_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
+      current_user_org_id: { Args: never; Returns: string }
+      generate_scheduled_dues: { Args: never; Returns: number }
+      post_payment: {
+        Args: {
+          p_amount: number
+          p_loan: string
+          p_notes?: string
+          p_request: string
+          p_type: Database["public"]["Enums"]["payment_type"]
+        }
+        Returns: {
+          amount: number
+          created_at: string | null
+          id: string
+          loan_id: string
+          notes: string | null
+          org_id: string
+          payment_date: string
+          posted_by: string | null
+          request_id: string | null
+          type: Database["public"]["Enums"]["payment_type"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
       due_status: "pending" | "paid" | "overdue" | "cancelled"
-      loan_status: "active" | "closed" | "defaulted"
+      loan_status: "active" | "overdue" | "closed" | "defaulted"
       payment_type: "interest" | "principal" | "other"
     }
     CompositeTypes: {
@@ -558,7 +621,7 @@ export const Constants = {
   public: {
     Enums: {
       due_status: ["pending", "paid", "overdue", "cancelled"],
-      loan_status: ["active", "closed", "defaulted"],
+      loan_status: ["active", "overdue", "closed", "defaulted"],
       payment_type: ["interest", "principal", "other"],
     },
   },

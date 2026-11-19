@@ -1,6 +1,7 @@
+import { businessDate } from '@/lib/businessDate'
 import { addMonths, format, getDaysInMonth, parseISO, setDate } from 'date-fns'
 import { calculateMonthlyInterest } from '@/lib/interest'
-import type { Loan, Due, Payment } from '../types'
+import type { Loan, Payment } from '../types'
 import type { Ledger } from './demoStorage'
 
 export function issueDue(ledger: Ledger, loan: Loan, date: string) {
@@ -32,13 +33,13 @@ export function postDemoPayment(ledger: Ledger, input: Omit<Payment,'id'|'create
   if (!loan) throw Error('Loan unavailable')
   const existing = ledger.payments.find(p => p.org_id === input.org_id && p.request_id === input.request_id)
   if (existing) {
-    if (['loan_id','amount','type','notes'].some((key: keyof Payment) => existing[key] !== input[key])) {
+    if (existing.loan_id !== input.loan_id || existing.amount !== input.amount || existing.type !== input.type || existing.notes !== input.notes) {
       throw Error('Request already used for different terms')
     }
     return existing
   }
   if (!['active','overdue'].includes(loan.status)) throw Error('Loan is closed for collections')
-  const today = new Date().toISOString().slice(0,10)
+  const today = businessDate()
   assess(ledger, loan, today)
   const open = ledger.dues.filter(d => d.loan_id === loan.id && ['pending','overdue'].includes(d.status))
   if (input.type === 'principal') {

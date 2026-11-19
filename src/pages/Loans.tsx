@@ -1,3 +1,5 @@
+import { businessDate } from '@/lib/businessDate'
+import { attachCollateral } from '@/data/attachCollateral'
 import { usePaymentPosting } from '@/hooks/usePaymentPosting'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -92,7 +94,7 @@ export default function Loans() {
     asset_description: '',
     asset_value: '',
     interest_rate_percent: '2.0',
-    start_date: format(new Date(), 'yyyy-MM-dd'),
+    start_date: businessDate(),
     due_date: format(addMonths(new Date(), 12), 'yyyy-MM-dd'),
     term_months: '12',
     notes: '',
@@ -256,7 +258,7 @@ export default function Loans() {
       asset_description: '',
       asset_value: '',
       interest_rate_percent: '2.0',
-      start_date: format(new Date(), 'yyyy-MM-dd'),
+      start_date: businessDate(),
       due_date: format(addMonths(new Date(), 12), 'yyyy-MM-dd'),
       term_months: '12',
       notes: '',
@@ -285,29 +287,6 @@ export default function Loans() {
           notes: form.notes || null,
         })
 
-        // Process any staged new images for this existing loan
-        for (const item of assetImages) {
-          if (item.file && item.id.startsWith('staged-')) {
-            const fileExt = item.file.name.split('.').pop() || 'jpg'
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-            const filePath = `${editingLoan.id}/${fileName}`
-
-            const storageKey = await provider.storage.upload('loan_assets', filePath, item.file, {
-              upsert: true,
-              contentType: item.file.type || 'image/jpeg',
-            })
-
-            await provider.loanAssets.add({
-              loan_id: editingLoan.id,
-              file_url: storageKey,
-              file_name: item.name,
-              file_size: item.file.size,
-              org_id: orgId,
-            })
-          }
-        }
-
-        toast({ title: 'Loan updated successfully' })
       } else {
         // Create new loan first to obtain the authentic loan ID
         const createdLoan = await provider.loans.create({
@@ -328,28 +307,15 @@ export default function Loans() {
           last_interest_calculated: null,
         })
 
-        // Now upload staged collateral images under the genuine loan.id without violating RLS
-        for (const item of assetImages) {
-          if (item.file) {
-            const fileExt = item.file.name.split('.').pop() || 'jpg'
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-            const filePath = `${createdLoan.id}/${fileName}`
-
-            const storageKey = await provider.storage.upload('loan_assets', filePath, item.file, {
-              upsert: true,
-              contentType: item.file.type || 'image/jpeg',
-            })
-
-            await provider.loanAssets.add({
-              loan_id: createdLoan.id,
-              file_url: storageKey,
-              file_name: item.name,
-              file_size: item.file.size,
-              org_id: orgId,
-            })
-          }
+        // Origination and its invoice are committed. A media retry must never originate a second loan.
+        try {
+          for (const item of assetImages) if (item.file) await attachCollateral(provider,orgId,createdLoan.id,item.file)
+        } catch {
+          resetForm()
+          setShowForm(false)
+          await qc.invalidateQueries()
+          throw Error('Loan created. Open its details to review and retry missing attachments.')
         }
-
         toast({ title: 'Loan created successfully', description: `Loan #${createdLoan.id.slice(0, 8)} active in vault.` })
       }
 

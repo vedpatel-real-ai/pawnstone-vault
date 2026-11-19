@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => ({
         writeFileSync(path.join(dir,'sw.js'),template.replace('/* BUNDLE_FILES */[]',JSON.stringify(files)).replace('BUILD_HASH',hash.digest('hex').slice(0,16)))
       },
     },
-  ].filter(Boolean),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -1,3 +1,4 @@
+import { supabase } from '@/integrations/supabase/client'
 import { useState } from 'react'
 import { isDemo } from '@/data/dataProvider'
 import { Button } from '@/components/ui/button'
@@ -42,8 +43,6 @@ function SupabaseSignup() {
     e.preventDefault()
     setLoading(true)
     try {
-      // Import supabase only in supabase mode
-      const { supabase } = await import('@/integrations/supabase/client')
       const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
       if (error) {
         setLoading(false)

@@ -23,12 +23,12 @@ grant insert(org_id,customer_id,loan_amount,remaining_principal,interest_rate_pe
   on public.loans to authenticated;
 
 create function private.next_month(prior date, anchor date) returns date
-language sql immutable strict set search_path = '' as $$
+language sql immutable strict set search_path = '' set timezone = 'Asia/Kolkata' as $$
   select least((date_trunc('month',prior) + interval '2 month - 1 day')::date,
     (date_trunc('month',prior) + interval '1 month')::date + (extract(day from anchor)::int - 1))
 $$;
 create function private.initialize_loan() returns trigger
-language plpgsql set search_path = '' as $$
+language plpgsql set search_path = '' set timezone = 'Asia/Kolkata' as $$
 begin
   if new.start_date > current_date then raise exception 'Start date cannot be in the future'; end if;
   new.remaining_principal := new.loan_amount;
@@ -39,7 +39,7 @@ begin
 end $$;
 create trigger initialize_loan before insert on public.loans for each row execute function private.initialize_loan();
 
-create function private.first_due() returns trigger language plpgsql security definer set search_path = '' as $$
+create function private.first_due() returns trigger language plpgsql security definer set search_path = '' set timezone = 'Asia/Kolkata' as $$
 declare amount numeric := round(new.remaining_principal * new.interest_rate_percent / 100,2);
 begin
   if amount > 0 then
@@ -52,7 +52,7 @@ create trigger first_due after insert on public.loans for each row execute funct
 
 -- Caller holds the loan row lock. Catch up before taking any principal off that row.
 create function private.assess(l public.loans) returns integer
-language plpgsql set search_path = '' as $$
+language plpgsql set search_path = '' set timezone = 'Asia/Kolkata' as $$
 declare
   period date := l.next_due_date;
   invoice public.dues;
@@ -83,7 +83,7 @@ begin
 end $$;
 
 create function private.post_payment(p_loan uuid,p_request uuid,p_amount numeric,p_type public.payment_type,p_notes text)
-returns public.payments language plpgsql security definer set search_path = '' as $$
+returns public.payments language plpgsql security definer set search_path = '' set timezone = 'Asia/Kolkata' as $$
 declare
   tenant uuid := public.current_user_org_id();
   l public.loans;
@@ -126,7 +126,7 @@ begin
   return receipt;
 end $$;
 create function public.post_payment(p_loan uuid,p_request uuid,p_amount numeric,p_type public.payment_type,p_notes text default null)
-returns public.payments language sql security invoker set search_path = '' as $$
+returns public.payments language sql security invoker set search_path = '' set timezone = 'Asia/Kolkata' as $$
   select * from private.post_payment(p_loan,p_request,p_amount,p_type,p_notes)
 $$;
 revoke all on all functions in schema private from public,anon,authenticated,service_role;

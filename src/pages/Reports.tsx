@@ -10,25 +10,25 @@ export default function Reports() {
   const { orgId } = useAuth()
   const provider = getProvider()
 
-  const { data: loans = [] } = useQuery({
+  const { data: loans = [], isLoading:loansLoading, isError:loansError } = useQuery({
     queryKey: ['loans-report', orgId],
     queryFn: async () => orgId ? provider.loans.list(orgId) : [],
     enabled: !!orgId,
   })
 
-  const { data: dues = [] } = useQuery({
+  const { data: dues = [], isLoading:duesLoading, isError:duesError } = useQuery({
     queryKey: ['dues-report', orgId],
     queryFn: async () => orgId ? provider.dues.list(orgId) : [],
     enabled: !!orgId,
   })
 
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [], isLoading:customersLoading, isError:customersError } = useQuery({
     queryKey: ['customers-report', orgId],
     queryFn: async () => orgId ? provider.customers.list(orgId) : [],
     enabled: !!orgId,
   })
 
-  const { data: payments = [] } = useQuery({
+  const { data: payments = [], isLoading:paymentsLoading, isError:paymentsError } = useQuery({
     queryKey: ['payments-report', orgId],
     queryFn: async () => orgId ? provider.payments.list(orgId) : [],
     enabled: !!orgId,
@@ -38,12 +38,14 @@ export default function Reports() {
     document.title = 'Reports & Data Exports | PawnTrack'
   }, [])
 
+  if (loansLoading || duesLoading || customersLoading || paymentsLoading) return <p>Loading reports…</p>
+  if (loansError || duesError || customersError || paymentsError) return <p role="alert">Could not load all report records.</p>
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Reports & Data Exports</h1>
         <p className="text-sm text-muted-foreground">
-          Export portfolio reports, payment registers, and customer records to CSV or JSON.
+          Export portfolio reports, payment registers, and customer records to CSV or PDF.
         </p>
       </div>
 

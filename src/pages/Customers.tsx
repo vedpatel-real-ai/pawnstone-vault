@@ -19,7 +19,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { getProvider } from '@/data'
 import type { Customer } from '@/data/types'
-import { CustomerAvatar, StorageImage, useStorageUrl } from '@/components/StorageImage'
+import { useStorageUrl } from '@/hooks/useStorageUrl'
+import { CustomerAvatar, StorageImage } from '@/components/StorageImage'
 import { Phone, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react'
 
 const TEN_DIGITS = /^\d{10}$/
@@ -124,67 +125,27 @@ export default function Customers() {
       if (alt_phone && !validatePhone(alt_phone)) throw new Error('Alternate contact must be a valid 10-digit number')
       if (alt_phone && phone === alt_phone) throw new Error('Alternate contact cannot match primary contact')
 
-      if (!editingId) {
-        const customer = await provider.customers.create({
-          name, phone, alt_phone: alt_phone || null, id_proof_number: id_proof_number || null,
-          notes: notes || null, org_id: orgId, email: null, address: null,
-          id_proof_url: null, profile_photo_url: null,
-        })
-
-        let profilePhotoUrl: string | null = null
-        let idProofUrl: string | null = null
-
-        if (photoFile) {
-          try {
-            profilePhotoUrl = await provider.storage.upload('customers', `${customer.id}/profile_photo.jpg`, photoFile, {
-              upsert: true, contentType: photoFile.type || 'image/jpeg',
-            })
-          } catch (err: unknown) {
-            console.error('Photo upload error:', err)
-          }
-        }
-        if (idProofFile) {
-          try {
-            const ext = idProofFile.type === 'application/pdf' ? 'pdf' : 'jpg'
-            idProofUrl = await provider.storage.upload('customers', `${customer.id}/id_proof.${ext}`, idProofFile, {
-              upsert: true, contentType: idProofFile.type || 'image/jpeg',
-            })
-          } catch (err: unknown) {
-            console.error('ID proof upload error:', err)
-          }
-        }
-
-        if (profilePhotoUrl || idProofUrl) {
-          await provider.customers.update(customer.id, {
-            ...(profilePhotoUrl ? { profile_photo_url: profilePhotoUrl } : {}),
-            ...(idProofUrl ? { id_proof_url: idProofUrl } : {}),
-          })
-        }
-      } else {
-        await provider.customers.update(editingId, {
-          name, phone, alt_phone: alt_phone || null, id_proof_number: id_proof_number || null, notes: notes || null,
-        })
-
-        if (photoFile) {
-          try {
-            const photoUrl = await provider.storage.upload('customers', `${editingId}/profile_photo.jpg`, photoFile, {
-              upsert: true, contentType: photoFile.type || 'image/jpeg',
-            })
-            await provider.customers.update(editingId, { profile_photo_url: photoUrl })
-          } catch (err: unknown) {
-            console.error('Photo upload error:', err)
-          }
-        }
-        if (idProofFile) {
-          try {
-            const ext = idProofFile.type === 'application/pdf' ? 'pdf' : 'jpg'
-            const idProofUrl = await provider.storage.upload('customers', `${editingId}/id_proof.${ext}`, idProofFile, {
-              upsert: true, contentType: idProofFile.type || 'image/jpeg',
-            })
-            await provider.customers.update(editingId, { id_proof_url: idProofUrl })
-          } catch (err: unknown) {
-            console.error('ID proof upload error:', err)
-          }
+      const details = { name:name.trim(), phone, alt_phone:alt_phone || null, id_proof_number:id_proof_number || null, notes:notes || null }
+      if (!details.name) throw Error('Enter a customer name')
+      let id = editingId
+      if (id) await provider.customers.update(id,details)
+      else {
+        const customer = await provider.customers.create({...details, org_id:orgId, email:null,address:null,
+          id_proof_url:null,profile_photo_url:null})
+        id = customer.id
+        setEditingId(id)
+      }
+      for (const [field,file,filename] of [
+        ['profile_photo_url',photoFile,'profile_photo.jpg'],
+        ['id_proof_url',idProofFile,idProofFile?.type === 'application/pdf' ? 'id_proof.pdf' : 'id_proof.jpg'],
+      ] as const) {
+        if (!file) continue
+        try {
+          const path = await provider.storage.upload('customers',id + '/' + filename,file,{upsert:true,contentType:file.type})
+          await provider.customers.update(id,{[field]:path})
+        } catch {
+          await qc.invalidateQueries({queryKey:['customers']})
+          throw Error('Customer saved. The attachment could not be saved. Retry from this form.')
         }
       }
     },
@@ -200,7 +161,7 @@ export default function Customers() {
   })
 
   const deleteCustomer = async (id: string) => {
-    if (!confirm('Delete this customer and all linked records? This action cannot be undone.')) return
+    if (!confirm('Delete this customer? Customers with loan history must be retained.')) return
     try {
       await provider.customers.remove(id)
       toast({ title: 'Customer deleted' })
@@ -303,7 +264,7 @@ export default function Customers() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Button onClick={openCreate}>Add Customer</Button>
-          <ExportButtons data={visibleCustomers as unknown as Record<string, unknown>[]} filename="customers" />
+          <ExportButtons data={visibleCustomers} filename="customers" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Input

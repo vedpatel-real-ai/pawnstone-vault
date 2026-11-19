@@ -1,3 +1,4 @@
+import { businessDate } from '@/lib/businessDate'
 // Demo data provider — fully browser-local, no network requests.
 // Implements the DataProvider interface using IndexedDB via localforage.
 
@@ -6,7 +7,7 @@ import type { Customer, Loan, Payment, Due, Notification, LoanAsset, AppSession 
 import { readLedger, editLedger, db, media, getDemoSession, setDemoSession, isInitialized, markInitialized, clearAllDemoData } from './demoStorage'
 import { createSeedData, getDemoOrgId } from './demoSeed'
 import { assess, issueDue, postDemoPayment } from './ledger'
-import { format, addMonths, parseISO, isBefore, startOfDay } from 'date-fns'
+import { format, addMonths, parseISO } from 'date-fns'
 
 const DEMO_USER = { id: 'demo-user-0001', email: 'demo@pawntrack.app' }
 
@@ -134,13 +135,13 @@ export function createDemoProvider(): DataProvider {
     loans: {
       async list(orgId: string) {
         await ensureInit()
-        return ((await readLedger()).loans)
+        return (await readLedger()).loans
           .filter(l => l.org_id === orgId)
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async get(id: string) {
         await ensureInit()
-        return ((await readLedger()).loans).find(l => l.id === id) || null
+        return (await readLedger()).loans.find(l => l.id === id) || null
       },
       async create(data) {
         await ensureInit()
@@ -150,10 +151,12 @@ export function createDemoProvider(): DataProvider {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
-        if (!(loan.loan_amount > 0) || !Number.isFinite(loan.loan_amount) ||
+        if (Math.round(loan.loan_amount * 100)/100 !== loan.loan_amount ||
+            Math.round(loan.interest_rate_percent * 1000)/1000 !== loan.interest_rate_percent ||
+            !(loan.loan_amount > 0) || !Number.isFinite(loan.loan_amount) ||
             !(loan.interest_rate_percent >= 0) || !Number.isFinite(loan.interest_rate_percent) ||
             !/^\d{4}-\d{2}-\d{2}$/.test(loan.start_date) ||
-            loan.start_date > new Date().toISOString().slice(0,10)) throw Error('Invalid loan terms')
+            loan.start_date > businessDate()) throw Error('Invalid loan terms')
         if (!(await db.customers.getAll()).some(c => c.id === loan.customer_id && c.org_id === loan.org_id)) throw Error('Unknown borrower')
         loan.remaining_principal = loan.loan_amount
         loan.status = 'active'
@@ -180,7 +183,7 @@ export function createDemoProvider(): DataProvider {
     payments: {
       async list(orgId: string) {
         await ensureInit()
-        return ((await readLedger()).payments)
+        return (await readLedger()).payments
           .filter(p => p.org_id === orgId)
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
@@ -194,7 +197,7 @@ export function createDemoProvider(): DataProvider {
     dues: {
       async list(orgId: string) {
         await ensureInit()
-        return ((await readLedger()).dues).filter(d => d.org_id === orgId)
+        return (await readLedger()).dues.filter(d => d.org_id === orgId)
       },
     },
 
@@ -286,7 +289,7 @@ export function createDemoProvider(): DataProvider {
     async generateDues(orgId: string): Promise<void> {
       await ensureInit()
       await editLedger(ledger => {
-        const today = new Date().toISOString().slice(0,10)
+        const today = businessDate()
         for (const loan of ledger.loans.filter(l => l.org_id === orgId)) assess(ledger,loan,today)
       })
     },

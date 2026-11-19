@@ -1,5 +1,5 @@
 create function public.generate_scheduled_dues() returns integer
-language plpgsql security invoker set search_path = '' as $$
+language plpgsql security invoker set search_path = '' set timezone = 'Asia/Kolkata' as $$
 declare l public.loans; generated integer := 0;
 begin
   for l in select * from public.loans where status in ('active','overdue') and next_due_date<=current_date
@@ -17,7 +17,7 @@ alter table public.notifications add column mail_state text
   check (mail_state in ('claimed','accepted','rejected','unknown')),
   add column mail_attempted_at timestamptz;
 create function public.claim_due_mail() returns table(notice_id uuid, recipient text, message text)
-language sql security invoker set search_path = '' as $$
+language sql security invoker set search_path = '' set timezone = 'Asia/Kolkata' as $$
   with eligible as (
     select n.id,c.email,format('Monthly interest of ₹%s is due on %s.',d.amount-d.paid_amount,d.due_date) as body
     from public.notifications n join public.dues d on d.id=n.due_id

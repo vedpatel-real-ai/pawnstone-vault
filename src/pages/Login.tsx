@@ -24,7 +24,6 @@ export default function Login() {
     const { error } = await provider.signIn(email, password)
     setLoading(false)
     if (error) toast({ title: 'Login failed', description: error, variant: 'destructive' })
-    else window.location.href = '/dashboard'
   }
 
   const handleDemoLogin = async () => {
@@ -32,7 +31,6 @@ export default function Login() {
     const { error } = await provider.signIn('demo@pawntrack.app', 'demo123')
     setLoading(false)
     if (error) toast({ title: 'Demo login failed', description: error, variant: 'destructive' })
-    else window.location.href = '/dashboard'
   }
 
   return (
