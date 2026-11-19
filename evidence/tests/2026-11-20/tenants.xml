@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="membership belongs to the authenticated identity and survives concurrent initialization" time="0.561012" classname="test" file="tests/integration/tenants.test.mjs"/>
+	<testcase name="two organizations see and mutate only their authorized rows" time="0.147036" classname="test" file="tests/integration/tenants.test.mjs"/>
+	<testcase name="private storage scopes upload, sign, update and removal to the parent row" time="0.272984" classname="test" file="tests/integration/tenants.test.mjs"/>
+	<!-- tests 3 -->
+	<!-- suites 0 -->
+	<!-- pass 3 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 2228.304834 -->
+</testsuites>

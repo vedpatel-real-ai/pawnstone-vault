@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="30" failures="0" errors="0" time="1.121">
+    <testsuite name="src/lib/dashboardCalculations.test.ts" timestamp="2026-11-19T20:22:15.654Z" hostname="192.168.1.6" tests="6" failures="0" errors="0" skipped="0" time="0.042">
+        <testcase classname="src/lib/dashboardCalculations.test.ts" name="dashboardCalculations &gt; formatINR formats numbers with Indian grouping and rupee symbol" time="0.031">
+        </testcase>
+        <testcase classname="src/lib/dashboardCalculations.test.ts" name="dashboardCalculations &gt; calculateUpcoming7DayDues matches dues from today through today + 7 days" time="0.005">
+        </testcase>
+        <testcase classname="src/lib/dashboardCalculations.test.ts" name="dashboardCalculations &gt; calculateOverdueLoans uses OLDEST unpaid due date to compute days overdue" time="0.001">
+        </testcase>
+        <testcase classname="src/lib/dashboardCalculations.test.ts" name="dashboardCalculations &gt; calculateHeldAssets includes active and overdue loans but excludes closed" time="0.001">
+        </testcase>
+        <testcase classname="src/lib/dashboardCalculations.test.ts" name="dashboardCalculations &gt; calculateLoanStatusBreakdown counts active, overdue, closed, defaulted correctly" time="0">
+        </testcase>
+        <testcase classname="src/lib/dashboardCalculations.test.ts" name="dashboardCalculations &gt; calculateMonthlyInterestTrend aggregates earnings chronologically" time="0.002">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/dueMail.test.ts" timestamp="2026-11-19T20:22:15.661Z" hostname="192.168.1.6" tests="1" failures="0" errors="0" skipped="0" time="0.003">
+        <testcase classname="src/lib/dueMail.test.ts" name="records provider acceptance, rejection and uncertain delivery separately" time="0.002">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/interest.test.ts" timestamp="2026-11-19T20:22:15.662Z" hostname="192.168.1.6" tests="1" failures="0" errors="0" skipped="0" time="0.004">
+        <testcase classname="src/lib/interest.test.ts" name="calculateMonthlyInterest &gt; calculates and rounds to 2 decimals" time="0.002">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/scheduler.test.ts" timestamp="2026-11-19T20:22:15.662Z" hostname="192.168.1.6" tests="7" failures="0" errors="0" skipped="0" time="0.021">
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; rejects request GET (0) before any privileged work" time="0.007">
+        </testcase>
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; rejects request POST (1) before any privileged work" time="0.006">
+        </testcase>
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; rejects request POST (2) before any privileged work" time="0.001">
+        </testcase>
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; rejects request POST (3) before any privileged work" time="0.001">
+        </testcase>
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; rejects request POST (4) before any privileged work" time="0.002">
+        </testcase>
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; requires complete server configuration" time="0.001">
+        </testcase>
+        <testcase classname="src/lib/scheduler.test.ts" name="scheduler entrypoint &gt; runs an authenticated job and redacts internal errors" time="0.002">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/serviceWorker.test.ts" timestamp="2026-11-19T20:22:15.663Z" hostname="192.168.1.6" tests="2" failures="0" errors="0" skipped="0" time="0.009">
+        <testcase classname="src/lib/serviceWorker.test.ts" name="retires the old cache before taking control and preserves unrelated caches" time="0.004">
+        </testcase>
+        <testcase classname="src/lib/serviceWorker.test.ts" name="passes private API, signed media and authorization-dependent requests through" time="0.004">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/data/demo/demoProvider.test.ts" timestamp="2026-11-19T20:22:15.678Z" hostname="192.168.1.6" tests="10" failures="0" errors="0" skipped="0" time="0.068">
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; authenticates demo user with correct credentials" time="0.013">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; rejects invalid demo credentials" time="0.002">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; lists populated seed customers, loans, payments, and dues" time="0.003">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; supports full customer CRUD" time="0.006">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; preserves financial history and allows collateral detail edits" time="0.012">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; reduces remaining_principal on principal payment and closes loan at 0" time="0.009">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; settles outstanding interest due on interest payment" time="0.01">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; generates missing dues idempotently and marks past pending dues as overdue" time="0.004">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; handles media upload and resolves getUrl gracefully" time="0.003">
+        </testcase>
+        <testcase classname="src/data/demo/demoProvider.test.ts" name="DemoProvider &gt; resets demo data cleanly back to initial state" time="0.004">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/data/demo/ledger.test.ts" timestamp="2026-11-19T20:22:15.714Z" hostname="192.168.1.6" tests="3" failures="0" errors="0" skipped="0" time="0.039">
+        <testcase classname="src/data/demo/ledger.test.ts" name="serializes concurrent demo paydowns and recognizes a retried receipt" time="0.021">
+        </testcase>
+        <testcase classname="src/data/demo/ledger.test.ts" name="retains partial interest and rolls back a rejected excess allocation" time="0.014">
+        </testcase>
+        <testcase classname="src/data/demo/ledger.test.ts" name="rounds monthly interest to the nearest paise, half up" time="0.002">
+        </testcase>
+    </testsuite>
+</testsuites>

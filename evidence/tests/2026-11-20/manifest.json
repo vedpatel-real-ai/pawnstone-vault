@@ -1,0 +1,268 @@
+{
+  "commit": "ec1bb3ee6ee65088ef12711026faa55e405ca15b",
+  "started": "2026-11-19T20:21:45.976885+00:00",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "node": "v24.14.0",
+  "npm": "11.9.0",
+  "supabase": "2.104.0",
+  "commands": [
+    {
+      "label": "install",
+      "command": [
+        "npm",
+        "ci",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "exit": 0,
+      "seconds": 7.48
+    },
+    {
+      "label": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 4.71
+    },
+    {
+      "label": "lint",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exit": 0,
+      "seconds": 8.88
+    },
+    {
+      "label": "typecheck-app",
+      "command": [
+        "npx",
+        "--no-install",
+        "tsc",
+        "-p",
+        "tsconfig.app.json",
+        "--noEmit"
+      ],
+      "exit": 0,
+      "seconds": 4.97
+    },
+    {
+      "label": "typecheck-node",
+      "command": [
+        "npx",
+        "--no-install",
+        "tsc",
+        "-p",
+        "tsconfig.node.json",
+        "--noEmit"
+      ],
+      "exit": 0,
+      "seconds": 1.0
+    },
+    {
+      "label": "unit",
+      "command": [
+        "npx",
+        "--no-install",
+        "vitest",
+        "run",
+        "--reporter=verbose",
+        "--reporter=junit",
+        "--outputFile=.cache/verification/unit.xml"
+      ],
+      "exit": 0,
+      "seconds": 2.45
+    },
+    {
+      "label": "browser",
+      "command": [
+        "npm",
+        "run",
+        "test:e2e"
+      ],
+      "exit": 0,
+      "seconds": 22.89
+    },
+    {
+      "label": "local-stack",
+      "command": [
+        "supabase",
+        "start",
+        "-x",
+        "realtime,imgproxy,logflare,vector,supavisor,edge-runtime,studio,inbucket"
+      ],
+      "exit": 0,
+      "seconds": 0.81
+    },
+    {
+      "label": "fresh-1",
+      "command": [
+        "supabase",
+        "db",
+        "reset",
+        "--local"
+      ],
+      "exit": 0,
+      "seconds": 29.95
+    },
+    {
+      "label": "fresh-2",
+      "command": [
+        "supabase",
+        "db",
+        "reset",
+        "--local"
+      ],
+      "exit": 0,
+      "seconds": 29.67
+    },
+    {
+      "label": "legacy-schema",
+      "command": [
+        "supabase",
+        "db",
+        "reset",
+        "--local",
+        "--version",
+        "20250818000000"
+      ],
+      "exit": 0,
+      "seconds": 26.9
+    },
+    {
+      "label": "legacy-records",
+      "command": [
+        "node",
+        "scripts/upgrade-fixture.mjs",
+        "seed"
+      ],
+      "exit": 0,
+      "seconds": 0.21
+    },
+    {
+      "label": "upgrade",
+      "command": [
+        "supabase",
+        "migration",
+        "up",
+        "--local",
+        "--include-all"
+      ],
+      "exit": 0,
+      "seconds": 0.71
+    },
+    {
+      "label": "reconcile",
+      "command": [
+        "node",
+        "scripts/upgrade-fixture.mjs",
+        "verify"
+      ],
+      "exit": 0,
+      "seconds": 0.1
+    },
+    {
+      "label": "tenants",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=junit",
+        "--test-reporter-destination=.cache/verification/tenants.xml",
+        "tests/integration/tenants.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 2.29
+    },
+    {
+      "label": "ledger",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=junit",
+        "--test-reporter-destination=.cache/verification/ledger.xml",
+        "tests/integration/ledger.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 1.45
+    },
+    {
+      "label": "scheduler",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=junit",
+        "--test-reporter-destination=.cache/verification/scheduler.xml",
+        "tests/integration/scheduler.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 1.71
+    },
+    {
+      "label": "edge",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=junit",
+        "--test-reporter-destination=.cache/verification/edge.xml",
+        "tests/integration/edge.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 1.56
+    },
+    {
+      "label": "session",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=junit",
+        "--test-reporter-destination=.cache/verification/session.xml",
+        "tests/integration/session.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 9.0
+    }
+  ],
+  "suites": {
+    "unit": {
+      "tests": 30,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "tests": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "tenants": {
+      "tests": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "ledger": {
+      "tests": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "scheduler": {
+      "tests": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "edge": {
+      "tests": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "session": {
+      "tests": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "run_url": null,
+  "finished": "2026-11-19T20:24:23.115365+00:00"
+}

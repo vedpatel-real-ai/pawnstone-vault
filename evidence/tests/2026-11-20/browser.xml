@@ -1,0 +1,12 @@
+<testsuites id="" name="" tests="3" failures="0" skipped="0" errors="0" time="21.768153">
+<testsuite name="e2e.spec.ts" timestamp="2026-11-19T20:22:31.695Z" hostname="" tests="1" failures="0" skipped="0" time="3.787" errors="0">
+<testcase name="PawnTrack Vault Demo Mode End-to-End Suite › Complete Demo Workflow: Login -&gt; Dashboard KPIs -&gt; Customer CRUD -&gt; Loan Origination -&gt; Payment -&gt; Reset" classname="e2e.spec.ts" time="3.787">
+</testcase>
+</testsuite>
+<testsuite name="offline.spec.ts" timestamp="2026-11-19T20:22:31.695Z" hostname="" tests="2" failures="0" skipped="0" time="2.529" errors="0">
+<testcase name="remote mode clears the legacy cache and offers no offline financial forms" classname="offline.spec.ts" time="0.486">
+</testcase>
+<testcase name="mobile demo preserves a local change offline and across a browser restart" classname="offline.spec.ts" time="2.043">
+</testcase>
+</testsuite>
+</testsuites>
