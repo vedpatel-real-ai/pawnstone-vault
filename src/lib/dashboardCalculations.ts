@@ -55,8 +55,7 @@ export interface AssetMixItem {
  * Format currency in Indian numbering system (e.g. ₹1,50,000)
  */
 export function formatINR(amount: number): string {
-  const rounded = Math.round(amount)
-  return `₹${rounded.toLocaleString('en-IN')}`
+  return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 }
 
 /**
@@ -96,7 +95,7 @@ export function calculateUpcoming7DayDues(
         loan_id: d.loan_id,
         customer_id: loan?.customer_id || '',
         customer_name: customerName,
-        amount: Number(d.amount || 0),
+        amount: (d.amount - (d.paid_amount ?? 0)),
         due_date: d.due_date,
         days_until_due: daysUntil,
       }
@@ -141,7 +140,7 @@ export function calculateOverdueLoans(
 
   return overdueLoans.map(l => {
     const list = duesByLoan.get(l.id) || []
-    const overdueAmount = list.reduce((sum, d) => sum + Number(d.amount || 0), 0)
+    const overdueAmount = list.reduce((sum, d) => sum + (d.amount - (d.paid_amount ?? 0)), 0)
 
     // Find earliest (oldest) missed due date to accurately represent delinquency age
     let oldestDate: Date | null = null

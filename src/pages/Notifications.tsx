@@ -14,7 +14,7 @@ export default function Notifications() {
   const navigate = useNavigate()
   const provider = getProvider()
 
-  const { data = [] } = useQuery({
+  const { data = [], isLoading,isError } = useQuery({
     queryKey: ['notifications', orgId],
     queryFn: async () => orgId ? provider.notifications.list(orgId) : [],
     enabled: !!orgId,
@@ -23,6 +23,9 @@ export default function Notifications() {
   useEffect(() => {
     document.title = 'Vault Notifications & Alerts | PawnTrack'
   }, [])
+
+  if (isLoading) return <p>Loading notifications…</p>
+  if (isError) return <p role="alert">Could not load notifications.</p>
 
   return (
     <div className="space-y-6 max-w-4xl">

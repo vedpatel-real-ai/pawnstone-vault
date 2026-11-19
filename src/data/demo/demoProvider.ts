@@ -1,12 +1,13 @@
+import { businessDate } from '@/lib/businessDate'
 // Demo data provider — fully browser-local, no network requests.
 // Implements the DataProvider interface using IndexedDB via localforage.
 
 import type { DataProvider } from '../dataProvider'
 import type { Customer, Loan, Payment, Due, Notification, LoanAsset, AppSession } from '../types'
-import { db, media, getDemoSession, setDemoSession, isInitialized, markInitialized, clearAllDemoData } from './demoStorage'
+import { readLedger, editLedger, db, media, getDemoSession, setDemoSession, isInitialized, markInitialized, clearAllDemoData } from './demoStorage'
 import { createSeedData, getDemoOrgId } from './demoSeed'
-import { calculateMonthlyInterest } from '@/lib/interest'
-import { format, addMonths, parseISO, isBefore, startOfDay } from 'date-fns'
+import { assess, issueDue, postDemoPayment } from './ledger'
+import { format, addMonths, parseISO } from 'date-fns'
 
 const DEMO_USER = { id: 'demo-user-0001', email: 'demo@pawntrack.app' }
 
@@ -25,9 +26,7 @@ async function initialize(): Promise<void> {
   if (await isInitialized()) return
   const seed = createSeedData()
   await db.customers.setAll(seed.customers)
-  await db.loans.setAll(seed.loans)
-  await db.payments.setAll(seed.payments)
-  await db.dues.setAll(seed.dues)
+  await editLedger(ledger => Object.assign(ledger, { loans:seed.loans, dues:seed.dues, payments:seed.payments }))
   await db.notifications.setAll(seed.notifications)
   await db.loanAssets.setAll(seed.loanAssets)
   await markInitialized()
@@ -38,63 +37,6 @@ let authListeners: Array<(session: AppSession | null) => void> = []
 
 function notifyAuthListeners(session: AppSession | null) {
   authListeners.forEach(cb => cb(session))
-}
-
-// Generate any missing monthly dues for active/overdue loans and mark past dues as overdue (idempotent)
-async function generateDuesForOrg(orgId: string): Promise<void> {
-  const allLoans = await db.loans.getAll()
-  const loans = allLoans.filter(l => l.org_id === orgId && (l.status === 'active' || l.status === 'overdue'))
-  const allDues = await db.dues.getAll()
-  const now = new Date()
-  const todayStr = format(now, 'yyyy-MM-dd')
-  let duesChanged = false
-
-  // 1. Transition past pending dues to overdue (never revert paid/cancelled)
-  const updatedDues = allDues.map(due => {
-    if (due.org_id === orgId && due.status === 'pending' && due.due_date < todayStr) {
-      duesChanged = true
-      return { ...due, status: 'overdue' as const }
-    }
-    return due
-  })
-
-  // 2. Generate missing monthly dues up to current month horizon
-  const newDues: Due[] = []
-
-  for (const loan of loans) {
-    const startDate = parseISO(loan.start_date)
-    let dueMonth = addMonths(startDate, 1)
-    const horizon = addMonths(now, 1)
-
-    while (isBefore(dueMonth, horizon)) {
-      const dueDateStr = format(dueMonth, 'yyyy-MM-dd')
-      const existsInCurrent = updatedDues.some(d => d.loan_id === loan.id && d.due_date === dueDateStr && d.due_type === 'interest')
-      const existsInNew = newDues.some(d => d.loan_id === loan.id && d.due_date === dueDateStr && d.due_type === 'interest')
-
-      if (!existsInCurrent && !existsInNew) {
-        const amount = calculateMonthlyInterest(loan.remaining_principal, loan.interest_rate_percent)
-        const isPast = isBefore(startOfDay(dueMonth), startOfDay(now))
-        const status: Due['status'] = isPast ? 'overdue' : 'pending'
-
-        newDues.push({
-          id: `demo-due-gen-${loan.id}-${dueDateStr}`,
-          org_id: orgId,
-          loan_id: loan.id,
-          due_date: dueDateStr,
-          amount,
-          due_type: 'interest',
-          status,
-          created_at: new Date().toISOString(),
-        })
-        duesChanged = true
-      }
-      dueMonth = addMonths(dueMonth, 1)
-    }
-  }
-
-  if (duesChanged) {
-    await db.dues.setAll([...updatedDues, ...newDues])
-  }
 }
 
 export function createDemoProvider(): DataProvider {
@@ -170,6 +112,7 @@ export function createDemoProvider(): DataProvider {
       },
       async remove(id) {
         await ensureInit()
+        if ((await readLedger()).loans.some(l => l.customer_id === id)) throw Error('Customer has loan history')
         const customer = (await db.customers.getAll()).find(c => c.id === id)
         if (customer) {
           if (customer.profile_photo_url) {
@@ -183,24 +126,6 @@ export function createDemoProvider(): DataProvider {
         }
 
         await db.customers.setAll((await db.customers.getAll()).filter(c => c.id !== id))
-
-        // Cascade: remove related loans, payments, dues, and loan assets
-        const loans = (await db.loans.getAll()).filter(l => l.customer_id === id)
-        const loanIds = new Set(loans.map(l => l.id))
-
-        // Remove media for all customer's loan assets
-        const allAssets = await db.loanAssets.getAll()
-        for (const a of allAssets) {
-          if (loanIds.has(a.loan_id)) {
-            revokeTrackedUrl(a.file_url)
-            await media.remove(a.file_url)
-          }
-        }
-
-        await db.loans.setAll((await db.loans.getAll()).filter(l => l.customer_id !== id))
-        await db.payments.setAll((await db.payments.getAll()).filter(p => !loanIds.has(p.loan_id)))
-        await db.dues.setAll((await db.dues.getAll()).filter(d => !loanIds.has(d.loan_id)))
-        await db.loanAssets.setAll((await db.loanAssets.getAll()).filter(a => !loanIds.has(a.loan_id)))
       },
     },
 
@@ -208,13 +133,13 @@ export function createDemoProvider(): DataProvider {
     loans: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.loans.getAll())
+        return (await readLedger()).loans
           .filter(l => l.org_id === orgId)
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async get(id: string) {
         await ensureInit()
-        return (await db.loans.getAll()).find(l => l.id === id) || null
+        return (await readLedger()).loans.find(l => l.id === id) || null
       },
       async create(data) {
         await ensureInit()
@@ -224,110 +149,47 @@ export function createDemoProvider(): DataProvider {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
-        await db.loans.setAll([...(await db.loans.getAll()), loan])
-        return loan
+        if (Math.round(loan.loan_amount * 100)/100 !== loan.loan_amount ||
+            Math.round(loan.interest_rate_percent * 1000)/1000 !== loan.interest_rate_percent ||
+            !(loan.loan_amount > 0) || !Number.isFinite(loan.loan_amount) ||
+            !(loan.interest_rate_percent >= 0) || !Number.isFinite(loan.interest_rate_percent) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(loan.start_date) ||
+            loan.start_date > businessDate()) throw Error('Invalid loan terms')
+        if (loan.due_date && loan.due_date < loan.start_date) throw Error('Maturity date precedes origination')
+        if (loan.asset_value !== null && !(loan.asset_value >= 0 && Number.isFinite(loan.asset_value))) throw Error('Invalid collateral value')
+        if (!(await db.customers.getAll()).some(c => c.id === loan.customer_id && c.org_id === loan.org_id)) throw Error('Unknown borrower')
+        loan.remaining_principal = loan.loan_amount
+        loan.status = 'active'
+        loan.next_due_date = format(addMonths(parseISO(loan.start_date),1),'yyyy-MM-dd')
+        return editLedger(ledger => {
+          ledger.loans.push(loan)
+          issueDue(ledger, loan, loan.next_due_date)
+          return loan
+        })
       },
       async update(id, data) {
-        await ensureInit()
-        const all = await db.loans.getAll()
-        const idx = all.findIndex(l => l.id === id)
-        if (idx >= 0) {
-          all[idx] = { ...all[idx], ...data, updated_at: new Date().toISOString() }
-          await db.loans.setAll(all)
-        }
+        const allowed = ['asset_type','asset_description','asset_value','term_months','due_date','notes']
+        if (Object.keys(data).some(k => !allowed.includes(k))) throw Error('Financial terms are immutable')
+        await editLedger(ledger => {
+          const loan = ledger.loans.find(l => l.id === id)
+          if (!loan) throw Error('Loan unavailable')
+          Object.assign(loan,data,{ updated_at: new Date().toISOString() })
+        })
       },
-      async remove(id) {
-        await ensureInit()
-        await db.loans.setAll((await db.loans.getAll()).filter(l => l.id !== id))
-        await db.payments.setAll((await db.payments.getAll()).filter(p => p.loan_id !== id))
-        await db.dues.setAll((await db.dues.getAll()).filter(d => d.loan_id !== id))
-
-        // Remove loan assets and their media
-        const assets = (await db.loanAssets.getAll()).filter(a => a.loan_id === id)
-        for (const a of assets) {
-          revokeTrackedUrl(a.file_url)
-          await media.remove(a.file_url)
-        }
-        await db.loanAssets.setAll((await db.loanAssets.getAll()).filter(a => a.loan_id !== id))
-      },
+      async remove() { throw Error('Loan history is retained') },
     },
 
     // --- Payments ---
     payments: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.payments.getAll())
+        return (await readLedger()).payments
           .filter(p => p.org_id === orgId)
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       },
       async create(data) {
         await ensureInit()
-        const payment: Payment = {
-          ...data,
-          id: `demo-payment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          created_at: new Date().toISOString(),
-        }
-
-        // 1. Save payment
-        await db.payments.setAll([...(await db.payments.getAll()), payment])
-
-        // 2. Synchronize loan state and dues based on payment type
-        const allLoans = await db.loans.getAll()
-        const loanIdx = allLoans.findIndex(l => l.id === payment.loan_id)
-
-        if (loanIdx >= 0) {
-          const loan = allLoans[loanIdx]
-
-          if (payment.type === 'principal') {
-            const newPrincipal = Math.max(0, Number(loan.remaining_principal || 0) - Number(payment.amount))
-            const isFullyPaid = newPrincipal === 0
-            const updatedStatus = isFullyPaid ? 'closed' : loan.status
-
-            allLoans[loanIdx] = {
-              ...loan,
-              remaining_principal: newPrincipal,
-              status: updatedStatus,
-              updated_at: new Date().toISOString(),
-            }
-            await db.loans.setAll(allLoans)
-          } else if (payment.type === 'interest') {
-            // Settle oldest unpaid due (overdue first, then pending)
-            const allDues = await db.dues.getAll()
-            const unpaidDues = allDues
-              .filter(d => d.loan_id === loan.id && (d.status === 'overdue' || d.status === 'pending'))
-              .sort((a, b) => a.due_date.localeCompare(b.due_date))
-
-            if (unpaidDues.length > 0) {
-              const dueToSettle = unpaidDues[0]
-              const dueIdx = allDues.findIndex(d => d.id === dueToSettle.id)
-              if (dueIdx >= 0) {
-                allDues[dueIdx] = { ...allDues[dueIdx], status: 'paid' }
-                await db.dues.setAll(allDues)
-              }
-            }
-
-            // Check if any overdue dues remain for this loan
-            const remainingOverdue = (await db.dues.getAll()).filter(
-              d => d.loan_id === loan.id && d.status === 'overdue'
-            )
-
-            // If no overdue dues remain, check if loan was overdue solely due to missed dues
-            if (remainingOverdue.length === 0 && loan.status === 'overdue') {
-              const todayStr = format(new Date(), 'yyyy-MM-dd')
-              const isPastMaturity = loan.due_date ? loan.due_date < todayStr : false
-              if (!isPastMaturity) {
-                allLoans[loanIdx] = {
-                  ...loan,
-                  status: 'active',
-                  updated_at: new Date().toISOString(),
-                }
-                await db.loans.setAll(allLoans)
-              }
-            }
-          }
-        }
-
-        return payment
+        return editLedger(ledger => postDemoPayment(ledger,data))
       },
     },
 
@@ -335,26 +197,7 @@ export function createDemoProvider(): DataProvider {
     dues: {
       async list(orgId: string) {
         await ensureInit()
-        return (await db.dues.getAll()).filter(d => d.org_id === orgId)
-      },
-      async update(id, data) {
-        await ensureInit()
-        const all = await db.dues.getAll()
-        const idx = all.findIndex(d => d.id === id)
-        if (idx >= 0) {
-          all[idx] = { ...all[idx], ...data }
-          await db.dues.setAll(all)
-        }
-      },
-      async create(data) {
-        await ensureInit()
-        const due: Due = {
-          ...data,
-          id: `demo-due-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          created_at: new Date().toISOString(),
-        }
-        await db.dues.setAll([...(await db.dues.getAll()), due])
-        return due
+        return (await readLedger()).dues.filter(d => d.org_id === orgId)
       },
     },
 
@@ -445,19 +288,21 @@ export function createDemoProvider(): DataProvider {
     // --- Demo-specific ---
     async generateDues(orgId: string): Promise<void> {
       await ensureInit()
-      await generateDuesForOrg(orgId)
+      await editLedger(ledger => {
+        const today = businessDate()
+        for (const loan of ledger.loans.filter(l => l.org_id === orgId)) assess(ledger,loan,today)
+      })
     },
 
     async resetDemoData(): Promise<void> {
+      await ensureInit()
       await clearAllDemoData()
       // Revoke all tracked object URLs
       objectUrlCache.forEach((_url, key) => revokeTrackedUrl(key))
       // Re-initialize with fresh seed data
       const seed = createSeedData()
       await db.customers.setAll(seed.customers)
-      await db.loans.setAll(seed.loans)
-      await db.payments.setAll(seed.payments)
-      await db.dues.setAll(seed.dues)
+      await editLedger(ledger => Object.assign(ledger, { loans:seed.loans, dues:seed.dues, payments:seed.payments }))
       await db.notifications.setAll(seed.notifications)
       await db.loanAssets.setAll(seed.loanAssets)
       await markInitialized()

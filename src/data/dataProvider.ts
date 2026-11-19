@@ -33,14 +33,12 @@ export interface DataProvider {
   // Payments
   payments: {
     list(orgId: string): Promise<Payment[]>
-    create(data: Omit<Payment, 'id' | 'created_at'>): Promise<Payment>
+    create(data: Omit<Payment, 'id' | 'created_at'> & { request_id: string }): Promise<Payment>
   }
 
   // Dues
   dues: {
     list(orgId: string): Promise<Due[]>
-    update(id: string, data: Partial<Due>): Promise<void>
-    create(data: Omit<Due, 'id' | 'created_at'>): Promise<Due>
   }
 
   // Notifications

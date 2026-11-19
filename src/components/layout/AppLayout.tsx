@@ -34,7 +34,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
 
   const handleSignOut = async () => {
     await provider.signOut()
-    window.location.href = '/login'
+    qc.clear()
   }
 
   const handleResetDemo = async () => {
@@ -49,7 +49,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b">
-        <div className="container flex items-center justify-between h-16">
+        <div className="container flex flex-wrap items-center justify-between gap-3 py-3">
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="font-semibold">PawnTrack</Link>
             {isDemo && (
@@ -58,7 +58,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
               </span>
             )}
           </div>
-          <nav className="flex items-center gap-4">
+          <nav className="flex max-w-full flex-wrap items-center gap-3">
             {nav.map(n => (
               <Link key={n.to} to={n.to} className={location.pathname.startsWith(n.to) ? 'text-primary' : 'text-muted-foreground'}>{n.label}</Link>
             ))}

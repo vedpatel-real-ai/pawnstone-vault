@@ -17,58 +17,25 @@ interface StorageAdapter {
 }
 
 function createAdapter(name: string, storeName: string): StorageAdapter {
-  let lf: LocalForage | null = null
-  try {
-    lf = localforage.createInstance({ name, storeName })
-  } catch {
-    lf = null
-  }
-
+  const lf = typeof window !== 'undefined' ? localforage.createInstance({ name, storeName }) : null
   return {
-    async getItem<T>(key: string): Promise<T | null> {
-      if (lf) {
-        try {
-          const val = await lf.getItem<T>(key)
-          if (val !== null && val !== undefined) return val
-        } catch {
-          // fall through to memory fallback
-        }
-      }
-      return memoryFallback.get(`${storeName}:${key}`) ?? null
+    async getItem<T>(key: string) {
+      if (lf) return lf.getItem<T>(key)
+      return structuredClone(memoryFallback.get(storeName + ':' + key) ?? null) as T | null
     },
-    async setItem<T>(key: string, value: T): Promise<T> {
-      memoryFallback.set(`${storeName}:${key}`, value)
-      if (lf) {
-        try {
-          await lf.setItem(key, value)
-        } catch {
-          // memory fallback already set
-        }
-      }
+    async setItem<T>(key: string, value: T) {
+      if (lf) return lf.setItem(key, value)
+      memoryFallback.set(storeName + ':' + key, structuredClone(value))
       return value
     },
-    async removeItem(key: string): Promise<void> {
-      memoryFallback.delete(`${storeName}:${key}`)
-      if (lf) {
-        try {
-          await lf.removeItem(key)
-        } catch {
-          // ignore
-        }
-      }
+    async removeItem(key) {
+      if (lf) await lf.removeItem(key)
+      memoryFallback.delete(storeName + ':' + key)
     },
-    async clear(): Promise<void> {
-      for (const k of Array.from(memoryFallback.keys())) {
-        if (k.startsWith(`${storeName}:`)) {
-          memoryFallback.delete(k)
-        }
-      }
-      if (lf) {
-        try {
-          await lf.clear()
-        } catch {
-          // ignore
-        }
+    async clear() {
+      if (lf) await lf.clear()
+      for (const key of memoryFallback.keys()) {
+        if (key.startsWith(storeName + ':')) memoryFallback.delete(key)
       }
     },
   }
@@ -82,11 +49,7 @@ const sessionStore = createAdapter('pawntrack-demo', 'session')
 // ---------- Generic helpers ----------
 
 async function getCollection<T>(key: string): Promise<T[]> {
-  try {
-    return (await dataStore.getItem<T[]>(prefix(key))) || []
-  } catch {
-    return []
-  }
+  return (await dataStore.getItem<T[]>(prefix(key))) || []
 }
 
 async function setCollection<T>(key: string, data: T[]): Promise<void> {
@@ -127,22 +90,38 @@ export async function markInitialized(): Promise<void> {
 
 // ---------- Data accessors ----------
 
+export interface Ledger {
+  loans: Loan[]
+  dues: Due[]
+  payments: Payment[]
+}
+
+export async function readLedger(): Promise<Ledger> {
+  const existing = await dataStore.getItem<Ledger>(prefix('ledger'))
+  if (existing) return existing
+  // Read pre-upgrade collections until the first atomic snapshot is committed.
+  return { loans: await getCollection<Loan>('loans'), dues: await getCollection<Due>('dues'),
+    payments: await getCollection<Payment>('payments') }
+}
+
+let pending = Promise.resolve()
+export function editLedger<T>(apply: (ledger: Ledger) => T): Promise<T> {
+  const commit = async () => {
+    const ledger = await readLedger()
+    const result = apply(ledger)
+    await dataStore.setItem(prefix('ledger'), ledger)
+    return result
+  }
+  const work = pending.then(async () => typeof navigator !== 'undefined' && navigator.locks
+    ? await navigator.locks.request('pawntrack-demo-ledger', commit) : await commit())
+  pending = work.then(() => undefined, () => undefined)
+  return work
+}
+
 export const db = {
   customers: {
     getAll: () => getCollection<Customer>('customers'),
     setAll: (data: Customer[]) => setCollection('customers', data),
-  },
-  loans: {
-    getAll: () => getCollection<Loan>('loans'),
-    setAll: (data: Loan[]) => setCollection('loans', data),
-  },
-  payments: {
-    getAll: () => getCollection<Payment>('payments'),
-    setAll: (data: Payment[]) => setCollection('payments', data),
-  },
-  dues: {
-    getAll: () => getCollection<Due>('dues'),
-    setAll: (data: Due[]) => setCollection('dues', data),
   },
   notifications: {
     getAll: () => getCollection<Notification>('notifications'),

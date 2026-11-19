@@ -1,1 +1,17 @@
-project_id = "bwquoysaytlhbmgoewkw"
+project_id = "pawntrack-local"
+
+[functions.generate-dues]
+verify_jwt = false
+
+[api]
+port = 56421
+[db]
+port = 56422
+shadow_port = 56420
+major_version = 17
+[studio]
+enabled = false
+[inbucket]
+enabled = false
+[analytics]
+enabled = false

@@ -16,19 +16,12 @@ export default function AssetInventory() {
   const navigate = useNavigate()
   const provider = getProvider()
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ['customers', orgId],
-    queryFn: async () => orgId ? provider.customers.list(orgId) : [],
-    enabled: !!orgId,
-  })
-
-  const customerMap = new Map(customers.map(c => [c.id, c.name]))
-
   const { data = [], isLoading } = useQuery({
     queryKey: ['assets-held', orgId],
     queryFn: async () => {
       if (!orgId) return []
-      const loans = await provider.loans.list(orgId)
+      const [loans,customers] = await Promise.all([provider.loans.list(orgId),provider.customers.list(orgId)])
+      const customerMap = new Map(customers.map(c => [c.id,c.name] as const))
       // Held assets = active, overdue, defaulted (strictly exclude closed)
       return loans
         .filter(l => l.status === 'active' || l.status === 'overdue' || l.status === 'defaulted')

@@ -22,6 +22,9 @@ test.describe('PawnTrack Vault Demo Mode End-to-End Suite', () => {
     await expect(page.getByRole('heading', { name: /Delinquency Watch/i })).toBeVisible()
     await expect(page.getByRole('heading', { name: /Interest Due This Week/i })).toBeVisible()
 
+    const collected = page.getByRole('link',{name:/Collected \(Month\)/}).locator('.text-2xl')
+    await expect(collected).toContainText('₹')
+    const before = Number((await collected.innerText()).replace(/[₹,]/g,''))
     // 4. Test Dashboard Drill-down to Loans
     const activeLoansCard = page.getByRole('heading', { name: 'Active Loans' }).locator('..').locator('..')
     await activeLoansCard.click()
@@ -67,22 +70,43 @@ test.describe('PawnTrack Vault Demo Mode End-to-End Suite', () => {
     const createLoanSubmit = page.getByRole('button', { name: 'Originate Loan' }).last()
     await createLoanSubmit.click()
 
+    await expect(page.getByRole('dialog')).toHaveCount(0)
     // Verify loan was created in portfolio
     await expect(page.getByText('E2E Automated Test Customer').first()).toBeVisible()
     await expect(page.getByText('22k Solid Gold Kada with BIS Hallmark (30g)')).toBeVisible()
 
     // 7. Record a payment on a loan
-    const recordPaymentBtn = page.getByRole('button', { name: 'Record Payment' }).first()
+    const recordPaymentBtn = page.getByText('22k Solid Gold Kada with BIS Hallmark (30g)').locator('xpath=ancestor::*[.//button[normalize-space()="Record Payment"]][1]').getByRole('button',{name:'Record Payment'})
     await recordPaymentBtn.click()
 
     const confirmPaymentBtn = page.getByRole('button', { name: 'Confirm Payment' })
     await expect(confirmPaymentBtn).toBeVisible()
+    const dialog = page.getByRole('dialog')
+    await dialog.locator('input[type=number]').fill('1')
     await confirmPaymentBtn.click()
 
     // 8. Navigate to Payments page and verify payment log
     await page.getByRole('link', { name: 'Payments' }).click()
     await page.waitForURL('**/payments')
     await expect(page.getByRole('heading', { name: /Payment Ledger/i })).toBeVisible()
+
+    const option = page.locator('select').first().getByRole('option').filter({hasText:'E2E Automated Test Customer'})
+    const loanId = await option.getAttribute('value')
+    await page.locator('select').first().selectOption(loanId!)
+    await page.locator('select').nth(1).selectOption('principal')
+    await page.getByPlaceholder('Payment amount').fill('10000')
+    await page.getByRole('button',{name:'Record Payment',exact:true}).click()
+    await expect(option).toContainText('1,40,000')
+    const month = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(),now.getMonth()+1,1,12).toISOString().slice(0,7)
+    })
+    await page.goto('/payments?dueMonth=' + month)
+    const due = page.getByText(/E2E Automated Test Customer · Due/).locator('../..')
+    await expect(due).toContainText('₹2,999')
+    await expect(due).toContainText('Collected ₹1')
+    await page.getByRole('link',{name:'Dashboard',exact:true}).click()
+    await expect(collected).toHaveText('₹' + (before + 1).toLocaleString('en-IN'))
 
     // 9. Navigate to Collateral Inventory and verify asset listing
     await page.getByRole('link', { name: 'Assets' }).click()

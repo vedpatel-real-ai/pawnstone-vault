@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { attachCollateral } from '@/data/attachCollateral'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
@@ -35,6 +36,13 @@ export function AssetImageUpload({
   const provider = getProvider()
   const [uploading, setUploading] = useState(false)
 
+  const previews = useRef(new Set<string>())
+  useEffect(() => {
+    const active = new Set(images.filter(item => item.file).map(item => item.url))
+    for (const url of previews.current) if (!active.has(url)) URL.revokeObjectURL(url)
+    previews.current = active
+  },[images])
+  useEffect(() => () => { for (const url of previews.current) URL.revokeObjectURL(url) },[])
   const isNewLoan = !loanId || loanId === 'temp'
 
   const onDrop = useCallback(
@@ -86,35 +94,12 @@ export function AssetImageUpload({
         try {
           const uploadedItems: AssetUploadItem[] = []
           for (const file of validFiles) {
-            const fileExt = file.name.split('.').pop() || 'jpg'
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-            const filePath = `${loanId}/${fileName}`
-
-            const storageKey = await provider.storage.upload('loan_assets', filePath, file, {
-              upsert: true,
-              contentType: file.type || 'image/jpeg',
-            })
-
-            let assetId = `asset-${Date.now()}`
-            if (orgId) {
-              const asset = await provider.loanAssets.add({
-                loan_id: loanId,
-                file_url: storageKey,
-                file_name: file.name,
-                file_size: file.size,
-                org_id: orgId,
-              })
-              assetId = asset.id
-            }
-
-            uploadedItems.push({
-              id: assetId,
-              url: storageKey,
-              name: file.name,
-            })
+            if (!orgId) throw Error('Organization unavailable')
+            const asset = await attachCollateral(provider,orgId,loanId,file)
+            uploadedItems.push({id:asset.id,url:asset.file_url,name:asset.file_name})
+            onImagesChange([...images,...uploadedItems])
           }
 
-          onImagesChange([...images, ...uploadedItems])
           toast({
             title: 'Images uploaded',
             description: `${uploadedItems.length} image(s) attached successfully`,
@@ -206,7 +191,7 @@ export function AssetImageUpload({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {images.map((img) => (
               <div key={img.id} className="relative group border rounded-lg overflow-hidden bg-muted/30">
-                {img.url.startsWith('blob:') || img.url.startsWith('http') ? (
+                {img.file && img.url.startsWith('blob:') ? (
                   <img
                     src={img.url}
                     alt={img.name}

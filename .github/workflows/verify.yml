@@ -1,0 +1,32 @@
+name: Verify PawnTrack
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.104.0
+      - run: python3 scripts/verify.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pawntrack-verification
+          path: .cache/verification/
+          include-hidden-files: true
+          retention-days: 30

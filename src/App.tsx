@@ -17,11 +17,30 @@ import AssetInventory from "./pages/AssetInventory";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-const queryClient = new QueryClient();
+import { isDemo } from './data/dataProvider'
+import { useSyncExternalStore } from 'react'
+import { AuthProvider } from './components/AuthProvider'
+
+const queryClient = new QueryClient({ defaultOptions: {
+  queries: { networkMode: 'always' }, mutations: { networkMode: 'always', retry: false },
+} })
+function subscribe(listener: () => void) {
+  window.addEventListener('online',listener)
+  window.addEventListener('offline',listener)
+  return () => {
+    window.removeEventListener('online',listener)
+    window.removeEventListener('offline',listener)
+  }
+}
+function ConnectionBoundary({children}: React.PropsWithChildren) {
+  const online = useSyncExternalStore(subscribe,() => navigator.onLine)
+  if (!online && !isDemo()) return <main role="status" className="container py-12">Offline. Reconnect to view shop records or record a collection.</main>
+  return children
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+    <ConnectionBoundary><AuthProvider><TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -113,7 +132,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </TooltipProvider>
+    </TooltipProvider></AuthProvider></ConnectionBoundary>
   </QueryClientProvider>
 );
 

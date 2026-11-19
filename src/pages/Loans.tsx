@@ -1,3 +1,6 @@
+import { businessDate } from '@/lib/businessDate'
+import { attachCollateral } from '@/data/attachCollateral'
+import { usePaymentPosting } from '@/hooks/usePaymentPosting'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -53,6 +56,7 @@ interface LoanDisplay {
 export default function Loans() {
   const { toast } = useToast()
   const qc = useQueryClient()
+  const { post, posting } = usePaymentPosting()
   const { orgId } = useAuth()
   const location = useLocation()
   const provider = getProvider()
@@ -77,8 +81,6 @@ export default function Loans() {
   const [showLoanDetails, setShowLoanDetails] = useState<LoanDisplay | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDisplay | null>(null)
   const [assetImages, setAssetImages] = useState<AssetUploadItem[]>([])
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [confirmClose, setConfirmClose] = useState<LoanDisplay | null>(null)
   const [paymentModal, setPaymentModal] = useState<{
     loan: LoanDisplay
     amount: string
@@ -92,7 +94,7 @@ export default function Loans() {
     asset_description: '',
     asset_value: '',
     interest_rate_percent: '2.0',
-    start_date: format(new Date(), 'yyyy-MM-dd'),
+    start_date: businessDate(),
     due_date: format(addMonths(new Date(), 12), 'yyyy-MM-dd'),
     term_months: '12',
     notes: '',
@@ -256,7 +258,7 @@ export default function Loans() {
       asset_description: '',
       asset_value: '',
       interest_rate_percent: '2.0',
-      start_date: format(new Date(), 'yyyy-MM-dd'),
+      start_date: businessDate(),
       due_date: format(addMonths(new Date(), 12), 'yyyy-MM-dd'),
       term_months: '12',
       notes: '',
@@ -280,37 +282,11 @@ export default function Loans() {
           asset_type: form.asset_type,
           asset_description: form.asset_description,
           asset_value: Number(form.asset_value || 0),
-          loan_amount: Number(form.loan_amount),
-          interest_rate_percent: Number(form.interest_rate_percent),
-          start_date: form.start_date,
           due_date: form.due_date,
           term_months: Number(form.term_months),
           notes: form.notes || null,
         })
 
-        // Process any staged new images for this existing loan
-        for (const item of assetImages) {
-          if (item.file && item.id.startsWith('staged-')) {
-            const fileExt = item.file.name.split('.').pop() || 'jpg'
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-            const filePath = `${editingLoan.id}/${fileName}`
-
-            const storageKey = await provider.storage.upload('loan_assets', filePath, item.file, {
-              upsert: true,
-              contentType: item.file.type || 'image/jpeg',
-            })
-
-            await provider.loanAssets.add({
-              loan_id: editingLoan.id,
-              file_url: storageKey,
-              file_name: item.name,
-              file_size: item.file.size,
-              org_id: orgId,
-            })
-          }
-        }
-
-        toast({ title: 'Loan updated successfully' })
       } else {
         // Create new loan first to obtain the authentic loan ID
         const createdLoan = await provider.loans.create({
@@ -331,39 +307,15 @@ export default function Loans() {
           last_interest_calculated: null,
         })
 
-        // Now upload staged collateral images under the genuine loan.id without violating RLS
-        for (const item of assetImages) {
-          if (item.file) {
-            const fileExt = item.file.name.split('.').pop() || 'jpg'
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-            const filePath = `${createdLoan.id}/${fileName}`
-
-            const storageKey = await provider.storage.upload('loan_assets', filePath, item.file, {
-              upsert: true,
-              contentType: item.file.type || 'image/jpeg',
-            })
-
-            await provider.loanAssets.add({
-              loan_id: createdLoan.id,
-              file_url: storageKey,
-              file_name: item.name,
-              file_size: item.file.size,
-              org_id: orgId,
-            })
-          }
+        // Origination and its invoice are committed. A media retry must never originate a second loan.
+        try {
+          for (const item of assetImages) if (item.file) await attachCollateral(provider,orgId,createdLoan.id,item.file)
+        } catch {
+          resetForm()
+          setShowForm(false)
+          await qc.invalidateQueries()
+          throw Error('Loan created. Open its details to review and retry missing attachments.')
         }
-
-        // Generate the initial monthly interest due
-        const initialDueAmount = (Number(form.loan_amount) * Number(form.interest_rate_percent)) / 100
-        await provider.dues.create({
-          org_id: orgId,
-          loan_id: createdLoan.id,
-          due_date: format(addMonths(parseISO(form.start_date), 1), 'yyyy-MM-dd'),
-          amount: Math.round(initialDueAmount * 100) / 100,
-          due_type: 'interest',
-          status: 'pending',
-        })
-
         toast({ title: 'Loan created successfully', description: `Loan #${createdLoan.id.slice(0, 8)} active in vault.` })
       }
 
@@ -397,36 +349,10 @@ export default function Loans() {
     setShowForm(true)
   }
 
-  const deleteLoan = async (loanId: string) => {
-    try {
-      await provider.loans.remove(loanId)
-      toast({ title: 'Loan deleted' })
-      qc.invalidateQueries({ queryKey: ['loans-detailed'] })
-      qc.invalidateQueries({ queryKey: ['dashboard'] })
-      qc.invalidateQueries({ queryKey: ['assets'] })
-    } catch {
-      toast({ title: 'Delete failed', variant: 'destructive' })
-    }
-    setConfirmDelete(null)
-  }
-
-  const closeLoan = async (loan: LoanDisplay) => {
-    try {
-      await provider.loans.update(loan.id, { status: 'closed', remaining_principal: 0 })
-      toast({ title: 'Loan closed', description: 'Remaining principal set to zero. Collateral ready for release.' })
-      qc.invalidateQueries({ queryKey: ['loans-detailed'] })
-      qc.invalidateQueries({ queryKey: ['dashboard'] })
-      qc.invalidateQueries({ queryKey: ['assets'] })
-    } catch {
-      toast({ title: 'Failed to close loan', variant: 'destructive' })
-    }
-    setConfirmClose(null)
-  }
-
   const recordPayment = async () => {
     if (!paymentModal || !orgId || Number(paymentModal.amount) <= 0) return
     try {
-      await provider.payments.create({
+      await post({
         loan_id: paymentModal.loan.id,
         amount: Number(paymentModal.amount),
         type: paymentModal.type,
@@ -443,10 +369,10 @@ export default function Loans() {
       qc.invalidateQueries({ queryKey: ['loans'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
       qc.invalidateQueries({ queryKey: ['payments'] })
-    } catch {
-      toast({ title: 'Failed to record payment', variant: 'destructive' })
+      setPaymentModal(null)
+    } catch (error) {
+      toast({ title: 'Failed to record payment', description: error instanceof Error ? error.message : 'Try again', variant: 'destructive' })
     }
-    setPaymentModal(null)
   }
 
   const getStatusBadge = (status: string) => {
@@ -604,14 +530,7 @@ export default function Loans() {
                   <Button size="sm" variant="outline" onClick={() => editLoan(loan)}>
                     <Edit className="w-4 h-4" />
                   </Button>
-                  {(loan.status === 'active' || loan.status === 'overdue') && (
-                    <Button size="sm" variant="outline" onClick={() => setConfirmClose(loan)}>
-                      Close
-                    </Button>
-                  )}
-                  <Button size="sm" variant="destructive" onClick={() => setConfirmDelete(loan.id)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+
                 </div>
               </div>
             ))}
@@ -674,6 +593,7 @@ export default function Loans() {
                 <Input
                   type="number"
                   placeholder="250000"
+                  disabled={!!editingLoan}
                   value={form.loan_amount}
                   onChange={(e) => setForm({ ...form, loan_amount: e.target.value })}
                   required
@@ -685,6 +605,7 @@ export default function Loans() {
                   type="number"
                   step="0.01"
                   placeholder="2.0"
+                  disabled={!!editingLoan}
                   value={form.interest_rate_percent}
                   onChange={(e) => setForm({ ...form, interest_rate_percent: e.target.value })}
                   required
@@ -715,6 +636,7 @@ export default function Loans() {
                 <label className="text-sm font-medium">Origination Date *</label>
                 <Input
                   type="date"
+                  disabled={!!editingLoan}
                   value={form.start_date}
                   onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                   required
@@ -931,7 +853,7 @@ export default function Loans() {
                 <Button variant="outline" onClick={() => setPaymentModal(null)}>
                   Cancel
                 </Button>
-                <Button onClick={recordPayment} disabled={!paymentModal.amount || Number(paymentModal.amount) <= 0}>
+                <Button onClick={recordPayment} aria-busy={posting} disabled={posting || !paymentModal.amount || Number(paymentModal.amount) <= 0}>
                   Confirm Payment
                 </Button>
               </div>
@@ -940,46 +862,6 @@ export default function Loans() {
         </Dialog>
       )}
 
-      {/* Confirm Delete */}
-      <AlertDialog open={!!confirmDelete} onOpenChange={() => setConfirmDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Loan Record</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove the loan, linked interest dues, and all collateral files.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmDelete && deleteLoan(confirmDelete)}>
-              Delete Record
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirm Close */}
-      <AlertDialog open={!!confirmClose} onOpenChange={() => setConfirmClose(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Close Loan & Release Collateral</AlertDialogTitle>
-            <AlertDialogDescription>
-              This marks the loan as fully settled and closed.
-              {confirmClose?.status === 'overdue' && (
-                <div className="mt-2 p-2 bg-destructive/10 text-destructive rounded-md text-xs font-semibold">
-                  ⚠️ Note: This loan has overdue interest. Confirm that all outstanding sums are collected before releasing collateral.
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmClose && closeLoan(confirmClose)}>
-              Close Loan
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

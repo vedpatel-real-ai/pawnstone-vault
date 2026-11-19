@@ -2,14 +2,14 @@ import { Button } from '@/components/ui/button'
 import Papa from 'papaparse'
 import jsPDF from 'jspdf'
 
-type ExportProps<T extends Record<string, unknown>> = {
+type ExportProps<T extends object> = {
   data: T[]
   filename: string
 }
 
-export function ExportButtons<T extends Record<string, unknown>>({ data, filename }: ExportProps<T>) {
+export function ExportButtons<T extends object>({ data, filename }: ExportProps<T>) {
   const handleCSV = () => {
-    const csv = Papa.unparse(data)
+    const csv = Papa.unparse(data, {escapeFormulae:true})
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
@@ -27,9 +27,11 @@ export function ExportButtons<T extends Record<string, unknown>>({ data, filenam
     y += 24
     data.forEach((row) => {
       const text = Object.entries(row).map(([k, v]) => `${k}: ${String(v)}`).join('  |  ')
-      doc.text(text.substring(0, 1100), 40, y)
-      y += lineHeight
-      if (y > 780) { doc.addPage(); y = 40 }
+      for (const line of doc.splitTextToSize(text, doc.internal.pageSize.getWidth() - 80)) {
+        if (y > 780) { doc.addPage(); y = 40 }
+        doc.text(line, 40, y)
+        y += lineHeight
+      }
     })
     doc.save(`${filename}.pdf`)
   }

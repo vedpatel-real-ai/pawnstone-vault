@@ -1,3 +1,4 @@
+import { supabase } from '@/integrations/supabase/client'
 import { useState } from 'react'
 import { isDemo } from '@/data/dataProvider'
 import { Button } from '@/components/ui/button'
@@ -5,10 +6,8 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { getProvider } from '@/data'
 
 export default function Signup() {
-  const { toast } = useToast()
   const { session } = useAuth()
   const demo = isDemo()
 
@@ -30,7 +29,6 @@ export default function Signup() {
     )
   }
 
-  // Supabase mode — original signup flow preserved
   return <SupabaseSignup />
 }
 
@@ -40,32 +38,34 @@ function SupabaseSignup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
-      // Import supabase only in supabase mode
-      const { supabase } = await import('@/integrations/supabase/client')
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
       if (error) {
         setLoading(false)
         toast({ title: 'Signup failed', description: error.message, variant: 'destructive' })
         return
       }
-      if (data?.user) {
-        const { data: org } = await supabase.from('organizations').select('id').limit(1).single()
-        if (org?.id) await supabase.from('profiles').upsert({ id: data.user.id, org_id: org.id, full_name: fullName })
-      }
       setLoading(false)
-      toast({ title: 'Account created', description: 'You can now sign in.' })
-      window.location.href = '/login'
+      if (!data.session) setAwaitingConfirmation(true)
     } catch (err: unknown) {
       setLoading(false)
       const msg = err instanceof Error ? err.message : 'Unknown error'
       toast({ title: 'Signup failed', description: msg, variant: 'destructive' })
     }
   }
+
+  if (awaitingConfirmation) return (
+    <main className="container max-w-md py-12 space-y-4">
+      <h1 className="text-2xl font-semibold">Check your email</h1>
+      <p>Follow the confirmation link sent to your address, then sign in to open your shop.</p>
+      <Link to="/login" className="underline">Go to sign in</Link>
+    </main>
+  )
 
   return (
     <div className="min-h-screen flex items-center justify-center">

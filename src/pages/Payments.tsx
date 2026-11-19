@@ -1,3 +1,4 @@
+import { usePaymentPosting } from '@/hooks/usePaymentPosting'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ import { DollarSign, Calendar, CreditCard, ArrowUpRight } from 'lucide-react'
 export default function Payments() {
   const { toast } = useToast()
   const qc = useQueryClient()
+  const { post, posting } = usePaymentPosting()
   const { orgId } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -59,13 +61,13 @@ export default function Payments() {
     enabled: !!orgId && !!dueMonthParam,
   })
 
-  const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers])
-  const loanMap = useMemo(() => new Map(loans.map(l => [l.id, l])), [loans])
+  const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name] as const)), [customers])
+  const loanMap = useMemo(() => new Map(loans.map(l => [l.id, l] as const)), [loans])
 
   // Active / payable loans for new payments
   const payableLoans = useMemo(() => loans.filter(l => l.status === 'active' || l.status === 'overdue'), [loans])
 
-  const [form, setForm] = useState({ loan_id: '', amount: '', type: 'interest', notes: '' })
+  const [form, setForm] = useState({ loan_id: params.get('loan') ?? '', amount: params.get('amount') ?? '', type: 'interest', notes: '' })
   const canSave = useMemo(() => form.loan_id && Number(form.amount) > 0, [form])
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function Payments() {
     if (!orgId || !form.loan_id || Number(form.amount) <= 0) return
 
     try {
-      await provider.payments.create({
+      await post({
         loan_id: form.loan_id,
         amount: Number(form.amount),
         type: form.type as 'interest' | 'principal' | 'other',
@@ -116,7 +118,7 @@ export default function Payments() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Payments & Collections</h1>
-          <p className="text-sm text-muted-foreground">Log interest dues and principal repayments with automatic ledger balancing.</p>
+          <p className="text-sm text-muted-foreground">Interest collections pay the oldest open dues first. Principal repayments reduce the loan balance.</p>
         </div>
         <ExportButtons data={visiblePayments || []} filename="payments-ledger" />
       </div>
@@ -130,8 +132,8 @@ export default function Payments() {
           <CardContent>
             <form onSubmit={addPayment} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Select Loan *</label>
-                <select
+                <label htmlFor="payment-loan" className="text-sm font-medium">Select Loan *</label>
+                <select id="payment-loan"
                   value={form.loan_id}
                   onChange={(e) => {
                     const lId = e.target.value
@@ -155,8 +157,8 @@ export default function Payments() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Payment Type *</label>
-                <select
+                <label htmlFor="payment-type" className="text-sm font-medium">Payment Type *</label>
+                <select id="payment-type"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                   className="w-full border rounded-md h-10 px-3 bg-background text-sm"
@@ -168,9 +170,9 @@ export default function Payments() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Amount (₹) *</label>
-                <Input
-                  placeholder="Payment amount"
+                <label htmlFor="payment-amount" className="text-sm font-medium">Amount (₹) *</label>
+                <Input id="payment-amount"
+                  min="0.01" step="0.01" placeholder="Payment amount"
                   type="number"
                   value={form.amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -179,15 +181,15 @@ export default function Payments() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Notes / Reference</label>
-                <Input
+                <label htmlFor="payment-notes" className="text-sm font-medium">Notes / Reference</label>
+                <Input id="payment-notes"
                   placeholder="e.g. UPI Ref #4902194 or Cash Receipt"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={!canSave}>
+              <Button type="submit" className="w-full" disabled={!canSave || posting}>
                 Record Payment
               </Button>
             </form>
@@ -221,11 +223,11 @@ export default function Payments() {
                             {customerName} · Due: {d.due_date}
                           </div>
                           <div className="text-xs text-muted-foreground font-mono">
-                            Loan #{d.loan_id.slice(0, 8)}
+                            Loan #{d.loan_id.slice(0, 8)} · Collected {formatINR(d.paid_amount ?? 0)}
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="font-bold text-sm">{formatINR(d.amount)}</span>
+                          <span className="font-bold text-sm">{formatINR(d.amount - (d.paid_amount ?? 0))}</span>
                           <Badge variant={d.status === 'overdue' ? 'destructive' : 'outline'}>
                             {d.status}
                           </Badge>
