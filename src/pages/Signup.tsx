@@ -38,6 +38,7 @@ function SupabaseSignup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,14 +51,21 @@ function SupabaseSignup() {
         return
       }
       setLoading(false)
-      toast({ title: 'Account created', description: data.session ? 'Signed in.' : 'Check your email to confirm your address.' })
-      window.location.href = '/login'
+      if (!data.session) setAwaitingConfirmation(true)
     } catch (err: unknown) {
       setLoading(false)
       const msg = err instanceof Error ? err.message : 'Unknown error'
       toast({ title: 'Signup failed', description: msg, variant: 'destructive' })
     }
   }
+
+  if (awaitingConfirmation) return (
+    <main className="container max-w-md py-12 space-y-4">
+      <h1 className="text-2xl font-semibold">Check your email</h1>
+      <p>Follow the confirmation link sent to your address, then sign in to open your shop.</p>
+      <Link to="/login" className="underline">Go to sign in</Link>
+    </main>
+  )
 
   return (
     <div className="min-h-screen flex items-center justify-center">
