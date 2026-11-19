@@ -1,19 +1,10 @@
 -- PawnTrack Supabase schema and RLS policies
 -- Enable extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Helper: current user's organization
-CREATE OR REPLACE FUNCTION public.current_user_org_id()
-RETURNS uuid
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT org_id FROM public.profiles WHERE id = auth.uid();
-$$;
 
 -- Organizations
 CREATE TABLE IF NOT EXISTS public.organizations (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   created_at timestamptz DEFAULT now()
 );
@@ -27,9 +18,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at timestamptz DEFAULT now()
 );
 
+-- Helper: current user's organization
+CREATE OR REPLACE FUNCTION public.current_user_org_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT org_id FROM public.profiles WHERE id = auth.uid();
+$$;
+
 -- Customers
 CREATE TABLE IF NOT EXISTS public.customers (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   name text NOT NULL,
   email text,
@@ -44,7 +44,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS public.loans (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   customer_id uuid REFERENCES public.customers(id) ON DELETE CASCADE,
   asset_type text, -- e.g., 'gold','car','documents'
@@ -83,7 +83,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS public.payments (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   loan_id uuid REFERENCES public.loans(id) ON DELETE CASCADE,
   amount numeric(12,2) NOT NULL,
@@ -99,7 +99,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS public.dues (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   loan_id uuid REFERENCES public.loans(id) ON DELETE CASCADE,
   due_date date NOT NULL,
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS public.dues (
 
 -- Notifications
 CREATE TABLE IF NOT EXISTS public.notifications (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE,
   loan_id uuid REFERENCES public.loans(id),
   title text NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 
 -- Audit logs
 CREATE TABLE IF NOT EXISTS public.audit_logs (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid REFERENCES public.organizations(id),
   user_id uuid,
   action text,
@@ -143,36 +143,47 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Policies: organizations (read-only within user's org via membership)
+DROP POLICY IF EXISTS orgs_read ON public.organizations;
 CREATE POLICY orgs_read ON public.organizations
 FOR SELECT USING (
   id = current_user_org_id()
 );
 
 -- Profiles: self only
+DROP POLICY IF EXISTS profiles_select ON public.profiles;
 CREATE POLICY profiles_select ON public.profiles
 FOR SELECT USING (id = auth.uid());
+DROP POLICY IF EXISTS profiles_insert ON public.profiles;
 CREATE POLICY profiles_insert ON public.profiles
 FOR INSERT WITH CHECK (id = auth.uid());
+DROP POLICY IF EXISTS profiles_update ON public.profiles;
 CREATE POLICY profiles_update ON public.profiles
 FOR UPDATE USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
 -- Generic org-bound policies
+DROP POLICY IF EXISTS customers_all ON public.customers;
 CREATE POLICY customers_all ON public.customers
 FOR ALL USING (org_id = current_user_org_id()) WITH CHECK (org_id = current_user_org_id());
 
+DROP POLICY IF EXISTS loans_all ON public.loans;
 CREATE POLICY loans_all ON public.loans
 FOR ALL USING (org_id = current_user_org_id()) WITH CHECK (org_id = current_user_org_id());
 
+DROP POLICY IF EXISTS payments_all ON public.payments;
 CREATE POLICY payments_all ON public.payments
 FOR ALL USING (org_id = current_user_org_id()) WITH CHECK (org_id = current_user_org_id());
 
+DROP POLICY IF EXISTS dues_all ON public.dues;
 CREATE POLICY dues_all ON public.dues
 FOR ALL USING (org_id = current_user_org_id()) WITH CHECK (org_id = current_user_org_id());
 
+DROP POLICY IF EXISTS notifications_all ON public.notifications;
 CREATE POLICY notifications_all ON public.notifications
 FOR ALL USING (org_id = current_user_org_id()) WITH CHECK (org_id = current_user_org_id());
 
+DROP POLICY IF EXISTS audit_logs_select ON public.audit_logs;
 CREATE POLICY audit_logs_select ON public.audit_logs
 FOR SELECT USING (org_id = current_user_org_id());
+DROP POLICY IF EXISTS audit_logs_insert ON public.audit_logs;
 CREATE POLICY audit_logs_insert ON public.audit_logs
 FOR INSERT WITH CHECK (org_id = current_user_org_id());
