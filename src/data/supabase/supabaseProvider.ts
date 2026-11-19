@@ -86,9 +86,7 @@ export function createSupabaseProvider(): DataProvider {
         if (error) throw error
       },
       async remove(id) {
-        await supabase.from('loan_assets').delete().eq('loan_id', id)
-        const { error } = await supabase.from('loans').delete().eq('id', id)
-        if (error) throw error
+        throw Error('Loan history is retained')
       },
     },
 
@@ -100,36 +98,11 @@ export function createSupabaseProvider(): DataProvider {
         return (data || []) as Payment[]
       },
       async create(input) {
-        const { data: payment, error } = await supabase.from('payments').insert(input as never).select().single()
-        if (error) throw error
-
-        // Synchronize principal balance
-        if (input.type === 'principal' && input.loan_id) {
-          const { data: loan } = await supabase.from('loans').select('remaining_principal, status').eq('id', input.loan_id).maybeSingle()
-          if (loan) {
-            const newPrincipal = Math.max(0, Number(loan.remaining_principal || 0) - Number(input.amount))
-            const updatePayload: Record<string, unknown> = { remaining_principal: newPrincipal }
-            if (newPrincipal === 0) {
-              updatePayload.status = 'closed'
-            }
-            await supabase.from('loans').update(updatePayload as never).eq('id', input.loan_id)
-          }
-        } else if (input.type === 'interest' && input.loan_id) {
-          // Settle oldest unpaid due for this loan
-          const { data: unpaidDues } = await supabase
-            .from('dues')
-            .select('id, status, due_date')
-            .eq('loan_id', input.loan_id)
-            .in('status', ['overdue', 'pending'])
-            .order('due_date', { ascending: true })
-            .limit(1)
-
-          if (unpaidDues && unpaidDues.length > 0) {
-            await supabase.from('dues').update({ status: 'paid' } as never).eq('id', unpaidDues[0].id)
-          }
-        }
-
-        return payment as Payment
+        const { data, error } = await supabase.rpc('post_payment', {
+          p_request:input.request_id, p_loan:input.loan_id, p_amount:input.amount, p_type:input.type, p_notes:input.notes,
+        })
+        if (error) throw Error(error.message)
+        return data as Payment
       },
     },
 
@@ -139,15 +112,6 @@ export function createSupabaseProvider(): DataProvider {
         const { data, error } = await supabase.from('dues').select('*')
         if (error) throw error
         return (data || []) as Due[]
-      },
-      async update(id, input) {
-        const { error } = await supabase.from('dues').update(input as never).eq('id', id)
-        if (error) throw error
-      },
-      async create(input) {
-        const { data, error } = await supabase.from('dues').insert(input as never).select().single()
-        if (error) throw error
-        return data as Due
       },
     },
 

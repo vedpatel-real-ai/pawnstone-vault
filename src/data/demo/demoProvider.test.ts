@@ -75,7 +75,7 @@ describe('DemoProvider', () => {
     expect(deleted).toBeNull()
   })
 
-  it('supports full loan CRUD and cascade cleanup', async () => {
+  it('preserves financial history and allows collateral detail edits', async () => {
     const customers = await provider.customers.list(orgId)
     const customerId = customers[0].id
 
@@ -88,7 +88,7 @@ describe('DemoProvider', () => {
       loan_amount: 30000,
       remaining_principal: 30000,
       interest_rate_percent: 2.0,
-      start_date: '2026-01-01',
+      start_date: new Date().toISOString().slice(0,10),
       due_date: '2026-06-01',
       next_due_date: '2026-02-01',
       term_months: 6,
@@ -101,13 +101,13 @@ describe('DemoProvider', () => {
     const fetched = await provider.loans.get(loan.id)
     expect(fetched?.asset_description).toBe('Test Gold Ring')
 
-    await provider.loans.update(loan.id, { status: 'closed' })
+    await expect(provider.loans.update(loan.id, { status: 'closed' })).rejects.toThrow()
+    await provider.loans.update(loan.id, {notes:'Inspected'})
     const updated = await provider.loans.get(loan.id)
-    expect(updated?.status).toBe('closed')
-
-    await provider.loans.remove(loan.id)
-    const deleted = await provider.loans.get(loan.id)
-    expect(deleted).toBeNull()
+    expect(updated?.status).toBe('active')
+    expect(updated?.notes).toBe('Inspected')
+    await expect(provider.loans.remove(loan.id)).rejects.toThrow()
+    await expect(provider.customers.remove(customerId)).rejects.toThrow()
   })
 
   it('reduces remaining_principal on principal payment and closes loan at 0', async () => {
@@ -121,7 +121,7 @@ describe('DemoProvider', () => {
       loan_amount: 50000,
       remaining_principal: 50000,
       interest_rate_percent: 2.0,
-      start_date: '2026-01-01',
+      start_date: new Date().toISOString().slice(0,10),
       due_date: '2026-06-01',
       next_due_date: '2026-02-01',
       term_months: 6,
@@ -133,6 +133,7 @@ describe('DemoProvider', () => {
     // Partial principal payment: ₹20,000
     await provider.payments.create({
       org_id: orgId,
+      request_id: crypto.randomUUID(),
       loan_id: loan.id,
       amount: 20000,
       type: 'principal',
@@ -147,6 +148,7 @@ describe('DemoProvider', () => {
     // Full remaining payoff: ₹30,000
     await provider.payments.create({
       org_id: orgId,
+      request_id: crypto.randomUUID(),
       loan_id: loan.id,
       amount: 30000,
       type: 'principal',
@@ -156,7 +158,9 @@ describe('DemoProvider', () => {
 
     updatedLoan = await provider.loans.get(loan.id)
     expect(updatedLoan?.remaining_principal).toBe(0)
-    expect(updatedLoan?.status).toBe('closed')
+    expect(updatedLoan?.status).toBe('active')
+    await provider.payments.create({ org_id:orgId,loan_id:loan.id,request_id:crypto.randomUUID(),amount:1000,type:'interest',notes:null,payment_date:new Date().toISOString().slice(0,10) })
+    expect((await provider.loans.get(loan.id))?.status).toBe('closed')
   })
 
   it('settles outstanding interest due on interest payment', async () => {
@@ -170,7 +174,7 @@ describe('DemoProvider', () => {
       loan_amount: 100000,
       remaining_principal: 100000,
       interest_rate_percent: 2.5,
-      start_date: '2026-01-01',
+      start_date: new Date().toISOString().slice(0,10),
       due_date: '2026-12-01',
       next_due_date: '2026-02-01',
       term_months: 12,
@@ -179,20 +183,14 @@ describe('DemoProvider', () => {
       notes: null,
     })
 
-    const due = await provider.dues.create({
-      org_id: orgId,
-      loan_id: loan.id,
-      due_date: '2026-02-01',
-      amount: 2500,
-      due_type: 'interest',
-      status: 'pending',
-    })
+    const due = (await provider.dues.list(orgId)).find(d => d.loan_id === loan.id)!
 
     expect(due.status).toBe('pending')
 
     // Record interest payment
     await provider.payments.create({
       org_id: orgId,
+      request_id: crypto.randomUUID(),
       loan_id: loan.id,
       amount: 2500,
       type: 'interest',

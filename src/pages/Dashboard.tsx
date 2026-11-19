@@ -1,3 +1,4 @@
+import { usePaymentPosting } from '@/hooks/usePaymentPosting'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -45,7 +46,6 @@ import {
 import { getProvider } from '@/data'
 import {
   calculateAssetMix,
-  calculateDaysOverdue,
   calculateHeldAssets,
   calculateLoanStatusBreakdown,
   calculateMonthlyInterestTrend,
@@ -61,6 +61,7 @@ export default function Dashboard() {
   const provider = getProvider()
   const { toast } = useToast()
   const qc = useQueryClient()
+  const { post, posting } = usePaymentPosting()
 
   const now = new Date()
   const currentMonthStr = format(now, 'yyyy-MM')
@@ -133,7 +134,7 @@ export default function Dashboard() {
           d.due_date >= startMonthStr &&
           d.due_date <= endMonthStr
       )
-      const interestDueThisMonth = duesMonth.reduce((sum, d) => sum + Number(d.amount || 0), 0)
+      const interestDueThisMonth = duesMonth.reduce((sum, d) => sum + (d.amount - (d.paid_amount ?? 0)), 0)
 
       // 4. KPI: Interest Paid This Month
       const paymentsThisMonth = allPayments.filter(
@@ -200,7 +201,7 @@ export default function Dashboard() {
   useEffect(() => {
     document.title = 'Vault Command Dashboard | PawnTrack'
     const meta = document.querySelector("meta[name='description']") as HTMLMetaElement | null
-    if (meta) meta.content = 'Real-time operational dashboard for pawn loan portfolio management.'
+    if (meta) meta.content = 'Query-based operational dashboard for pawn loan portfolio management.'
   }, [])
 
   // Quick Action Handlers
@@ -257,17 +258,6 @@ export default function Dashboard() {
         notes: null,
       })
 
-      // Generate first month's interest due
-      const initialDue = (Number(loanForm.loan_amount) * Number(loanForm.interest_rate_percent)) / 100
-      await provider.dues.create({
-        org_id: orgId,
-        loan_id: loan.id,
-        due_date: format(addMonths(parseISO(loanForm.start_date), 1), 'yyyy-MM-dd'),
-        amount: Math.round(initialDue * 100) / 100,
-        due_type: 'interest',
-        status: 'pending',
-      })
-
       toast({ title: 'Loan originated', description: `Loan #${loan.id.slice(0, 8)} created successfully.` })
       setLoanForm({
         customer_id: '',
@@ -295,7 +285,7 @@ export default function Dashboard() {
       return
     }
     try {
-      await provider.payments.create({
+      await post({
         org_id: orgId,
         loan_id: paymentForm.loan_id,
         amount: Number(paymentForm.amount),
@@ -322,45 +312,19 @@ export default function Dashboard() {
         org_id: orgId,
         loan_id: loanId,
         title: `Payment Reminder: ${customerName}`,
-        body: `Automated reminder dispatched for delinquent loan #${loanId.slice(0, 8)}.`,
+        body: `Internal reminder recorded for delinquent loan #${loanId.slice(0, 8)}.`,
         sent_at: new Date().toISOString(),
         read: false,
       })
       setSentReminders(prev => new Set(prev).add(loanId))
       toast({
-        title: 'Reminder sent',
+        title: 'Reminder recorded',
         description: `Delinquency alert recorded for ${customerName}.`,
       })
       qc.invalidateQueries({ queryKey: ['notifications'] })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to send reminder'
       toast({ title: 'Failed to send reminder', description: msg, variant: 'destructive' })
-    }
-  }
-
-  const handleMarkDuePaid = async (dueId: string, loanId: string, amount: number, customerName: string) => {
-    if (!orgId) return
-    try {
-      await provider.payments.create({
-        org_id: orgId,
-        loan_id: loanId,
-        amount,
-        type: 'interest',
-        payment_date: format(now, 'yyyy-MM-dd'),
-        notes: 'Due settled via dashboard quick action',
-      })
-      await provider.dues.update(dueId, { status: 'paid' })
-      toast({
-        title: 'Due marked as paid',
-        description: `${formatINR(amount)} interest collected from ${customerName}.`,
-      })
-      await refetch()
-      qc.invalidateQueries({ queryKey: ['payments'] })
-      qc.invalidateQueries({ queryKey: ['dues'] })
-      qc.invalidateQueries({ queryKey: ['loans-detailed'] })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to mark due as paid'
-      toast({ title: 'Error', description: msg, variant: 'destructive' })
     }
   }
 
@@ -957,9 +921,9 @@ export default function Dashboard() {
                         size="sm"
                         variant="default"
                         className="h-8 text-xs"
-                        onClick={() => handleMarkDuePaid(u.due_id, u.loan_id, u.amount, u.customer_name)}
+                        onClick={() => navigate('/payments?loan=' + encodeURIComponent(u.loan_id) + '&amount=' + u.amount)}
                       >
-                        Mark as Paid
+                        Record collection
                       </Button>
                     </div>
                   </div>
@@ -1188,7 +1152,7 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setOpenPaymentModal(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddPayment} disabled={!paymentForm.loan_id || !Number(paymentForm.amount)}>
+            <Button onClick={handleAddPayment} aria-busy={posting} disabled={!paymentForm.loan_id || !Number(paymentForm.amount)}>
               Save Payment
             </Button>
           </DialogFooter>

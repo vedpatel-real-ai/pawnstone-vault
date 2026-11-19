@@ -48,6 +48,7 @@ export interface Loan {
 }
 
 export interface Payment {
+  request_id?: string | null
   id: string
   org_id: string
   loan_id: string
@@ -59,6 +60,7 @@ export interface Payment {
 }
 
 export interface Due {
+  paid_amount?: number
   id: string
   org_id: string
   loan_id: string
