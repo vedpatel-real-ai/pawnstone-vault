@@ -1,1 +1,4 @@
-project_id = "bwquoysaytlhbmgoewkw"
+project_id = "pawntrack-local"
+
+[functions.generate-dues]
+verify_jwt = false
